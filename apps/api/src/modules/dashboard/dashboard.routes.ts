@@ -1,8 +1,8 @@
 import { Router } from "express";
 
-import { getDashboard } from "../controllers/dashboard.controller.js";
+import { getDashboard } from "./dashboard.controller.js";
 
-import verifyUser from "../middleware/authMiddleware.js";
+import verifyUser from "../auth/auth.middleware.js";
 
 const router = Router();
 

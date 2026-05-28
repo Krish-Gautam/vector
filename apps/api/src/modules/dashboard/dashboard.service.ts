@@ -1,4 +1,5 @@
-import { supabase } from "../../lib/supabase.js";
+import { supabase } from "../../data/supabase.client.js";
+import { dailyTaskService } from "../dailytask/dailytask.service.js";
 
 type ActivityLog = {
   created_at: string;
@@ -6,6 +7,11 @@ type ActivityLog = {
 
 export class DashboardService {
   async getDashboard(userId: string) {
+    // =========================================================
+    // ENSURE WEEKLY PLAN EXISTS
+    // =========================================================
+    await dailyTaskService.ensureWeeklyPlan(userId);
+
     const today = new Date();
 
     const todayStr = today.toISOString().split("T")[0];
@@ -62,6 +68,15 @@ export class DashboardService {
       .eq("roadmap_id", roadmap?.id);
 
     // =========================================================
+    // ALL ROADMAP TASKS
+    // =========================================================
+
+    const { data: allTasks } = await supabase
+      .from("tasks")
+      .select("*")
+      .eq("roadmap_id", roadmap?.id);
+
+    // =========================================================
     // TODAY DAILY TASKS
     // =========================================================
 
@@ -71,6 +86,24 @@ export class DashboardService {
       .eq("user_id", userId)
       .eq("scheduled_for", todayStr)
       .order("created_at", {
+        ascending: true,
+      });
+
+    // =========================================================
+    // WEEKLY TASKS (7 days including today)
+    // =========================================================
+
+    const weekEnd = new Date(today);
+    weekEnd.setDate(today.getDate() + 6);
+    const weekEndStr = weekEnd.toISOString().split("T")[0];
+
+    const { data: weeklyTasks } = await supabase
+      .from("daily_tasks")
+      .select("*")
+      .eq("user_id", userId)
+      .gte("scheduled_for", todayStr)
+      .lte("scheduled_for", weekEndStr)
+      .order("scheduled_for", {
         ascending: true,
       });
 
@@ -179,16 +212,24 @@ export class DashboardService {
         : 0;
 
     // =========================================================
-    // ROADMAP PROGRESS
+    // ROADMAP PROGRESS (Based on Tasks, not Phases)
     // =========================================================
 
-    const totalPhases = phases?.length || 0;
+    const totalRoadmapTasks = allTasks?.length || 0;
 
-    const completedPhases =
-      phases?.filter((phase) => phase.status === "completed").length || 0;
+    const totalRoadmapMinutes =
+      allTasks?.reduce((sum, task) => sum + (task.estimated_minutes || 0), 0) || 0;
+    const completedRoadmapMinutes =
+      allTasks?.reduce((sum, task) => {
+        const estimated = task.estimated_minutes || 0;
+        const progress = task.progress_minutes || 0;
+        return sum + Math.min(progress, estimated);
+      }, 0) || 0;
 
     const roadmapProgress =
-      totalPhases > 0 ? Math.round((completedPhases / totalPhases) * 100) : 0;
+      totalRoadmapMinutes > 0
+        ? Math.round((completedRoadmapMinutes / totalRoadmapMinutes) * 100)
+        : 0;
 
     // =========================================================
     // EXECUTION SCORE
@@ -235,6 +276,19 @@ export class DashboardService {
 
           completed: task.completed,
         })),
+
+        weekly:
+          weeklyTasks?.map((task) => ({
+            id: task.id,
+
+            title: task.title,
+
+            estimatedMinutes: task.session_minutes,
+
+            completed: task.completed,
+
+            scheduledFor: task.scheduled_for,
+          })) || [],
       },
 
       analytics: {

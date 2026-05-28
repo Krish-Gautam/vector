@@ -6,6 +6,7 @@ import { ArrowLeft, ArrowRight, Check, Eye, EyeOff, X } from "lucide-react";
 import { useEffect, useRef, useState, FC, ReactNode } from "react";
 
 import { login } from "../../lib/auth";
+import api from "../../lib/api";
 
 type FieldStatus = "idle" | "valid" | "invalid";
 
@@ -227,7 +228,23 @@ export default function LoginPage() {
     try {
       setIsSubmitting(true);
       await login(email, password);
-      router.push("/home");
+      let destination = "/dashboard";
+
+      try {
+        await api.get("/api/roadmap");
+      } catch (error) {
+        const message =
+          typeof error === "object" && error && "response" in error
+            ? (error as { response?: { data?: { error?: string } } }).response?.data
+                ?.error
+            : null;
+
+        if (message?.toLowerCase().includes("no roadmap") || message?.toLowerCase().includes("no goal")) {
+          destination = "/onboarding";
+        }
+      }
+
+      router.replace(destination);
     } catch (error) {
       const message = error instanceof Error ? error.message : "Login failed.";
       setErrorMessage(message);

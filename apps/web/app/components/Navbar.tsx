@@ -21,18 +21,14 @@ import {
 import { supabase } from "../lib/supabase";
 
 const navItems = [
-  { label: "Home", icon: Home },
-  { label: "Plus Dashboard", icon: Crown },
-  { label: "Pricing", icon: WalletCards },
+  { label: "Home", icon: Home , href: "/home"},
+  { label: "Dashboard", icon: Crown, href: "/dashboard" },
+  { label: "Pricing", icon: WalletCards, href: "/pricing" },
 ];
 
 const dropdownItems = [
-  { label: "My Profile", icon: User },
-  { label: "Account", icon: Settings },
-  { label: "Sessions", icon: Bell, locked: true },
-  { label: "Troubleshooting", icon: CircleHelp },
-  { label: "New Features", icon: Crown },
-  { label: "Notification", icon: Bell, arrow: true },
+  { label: "My Profile", icon: User , href: "/profile"},
+  { label: "Account", icon: Settings, href: "/account" },
 ];
 
 export default function Navbar() {
@@ -43,7 +39,10 @@ export default function Navbar() {
 
   useEffect(() => {
     const handleOutside = (e: MouseEvent) => {
-      if (dropdownRef.current && !dropdownRef.current.contains(e.target as Node)) {
+      if (
+        dropdownRef.current &&
+        !dropdownRef.current.contains(e.target as Node)
+      ) {
         setOpen(false);
       }
     };
@@ -60,7 +59,7 @@ export default function Navbar() {
       const sessionUser = data.session?.user ?? null;
       setUserEmail(sessionUser?.email ?? null);
       setUserName(
-        (sessionUser?.user_metadata?.username as string | undefined) ?? null
+        (sessionUser?.user_metadata?.username as string | undefined) ?? null,
       );
     };
 
@@ -69,9 +68,9 @@ export default function Navbar() {
         const sessionUser = session?.user ?? null;
         setUserEmail(sessionUser?.email ?? null);
         setUserName(
-          (sessionUser?.user_metadata?.username as string | undefined) ?? null
+          (sessionUser?.user_metadata?.username as string | undefined) ?? null,
         );
-      }
+      },
     );
 
     loadSession();
@@ -90,12 +89,9 @@ export default function Navbar() {
   return (
     <header className="fixed left-1/2 top-5 z-50 w-[95%] max-w-7xl -translate-x-1/2 rounded-4xl border border-white/10 bg-black/60 shadow-[0_10px_40px_rgba(0,0,0,0.45)] backdrop-blur-2xl">
       <div className="mx-auto flex h-14 max-w-7xl items-center justify-between px-4">
-
         {/* LOGO */}
         <div className="flex items-center gap-2">
-          <span className="text-2xl font-semibold text-white">
-            Vector
-          </span>
+          <span className="text-2xl font-semibold text-white">Vector</span>
         </div>
 
         {/* NAV */}
@@ -103,13 +99,14 @@ export default function Navbar() {
           {navItems.map((item) => {
             const Icon = item.icon;
             return (
-              <button
-                key={item.label}
-                className="flex items-center gap-2 text-sm font-medium text-zinc-300 transition hover:text-white"
-              >
-                <Icon size={18} />
-                {item.label}
-              </button>
+              <Link href={item.href} key={item.label}>
+                <button
+                  className="flex items-center gap-2 text-sm font-medium text-zinc-300 transition hover:text-white"
+                >
+                  <Icon size={18} />
+                  {item.label}
+                </button>
+              </Link>
             );
           })}
         </nav>
@@ -127,8 +124,8 @@ export default function Navbar() {
               <ChevronDown
                 size={18}
                 className={clsx(
-                  "text-zinc-400 transition duration-300",
-                  open && "rotate-180"
+                  "text-zinc-400 transition duration-300 cursor-pointer",
+                  open && "rotate-180",
                 )}
               />
             </button>
@@ -139,7 +136,7 @@ export default function Navbar() {
                 "absolute right-0 top-16 w-[300px] overflow-hidden rounded-2xl border border-white/10 bg-[#121216] shadow-[0_20px_80px_rgba(0,0,0,0.7)] transition-all duration-200",
                 open
                   ? "visible translate-y-0 opacity-100"
-                  : "invisible -translate-y-2 opacity-0"
+                  : "invisible -translate-y-2 opacity-0",
               )}
             >
               {/* TOP */}
@@ -156,37 +153,27 @@ export default function Navbar() {
               </div>
 
               {/* ITEMS */}
-              <div className="py-2">
+              <div className="py-2 ">
                 {dropdownItems.map((item) => {
                   const Icon = item.icon;
                   return (
-                    <button
-                      key={item.label}
-                      className="flex w-full items-center justify-between px-3 py-2 transition hover:bg-white/5"
-                    >
-                      <div className="flex items-center gap-3">
+                    <Link href={item.href} key={item.label}>
+                      <button
+                        className="flex w-full items-center cursor-pointer justify-between px-3 py-2 transition hover:bg-white/5"
+                      >
+                        <div className="flex items-center gap-3">
                         <Icon size={18} className="text-zinc-400" />
                         <span
                           className={clsx(
                             "text-sm font-medium",
-                            item.locked ? "text-zinc-500" : "text-zinc-200"
                           )}
                         >
                           {item.label}
                         </span>
                       </div>
-                      <div className="flex items-center gap-2">
-                        {item.locked && (
-                          <Lock size={14} className="text-orange-400" />
-                        )}
-                        {item.arrow && (
-                          <ChevronDown
-                            size={16}
-                            className="-rotate-90 text-zinc-500"
-                          />
-                        )}
-                      </div>
+                      
                     </button>
+                    </Link>
                   );
                 })}
               </div>
@@ -219,10 +206,8 @@ export default function Navbar() {
             </Link>
           </div>
         )}
-
       </div>
       {/* ↑ closes max-w-7xl div */}
-
     </header>
   );
 }

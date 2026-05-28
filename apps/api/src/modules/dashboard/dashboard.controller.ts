@@ -1,8 +1,9 @@
-import { Request, Response } from "express";
-import { dashboardService } from "../services/dashboard/dashboard.service.js";
+import { Response } from "express";
+import { AuthRequest } from "../auth/auth.middleware.js";
+import { dashboardService } from "./dashboard.service.js";
 
 export const getDashboard = async (
-  req: Request,
+  req: AuthRequest,
   res: Response,
 ) => {
   try {

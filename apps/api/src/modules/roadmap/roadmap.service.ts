@@ -1,16 +1,61 @@
-import { roadmapSchema } from "../../schemas/roadmap.schema.js";
+import { roadmapSchema } from "./roadmap.schema.js";
 
-import { buildFaangPrompt } from "../../prompts/faang.prompt.js";
+import { buildFaangPrompt } from "../ai/prompts/faang.prompt.js";
 
 import { OpenAIService } from "../ai/openai.service.js";
 
-import { GoalRepository } from "../../repositories/goal.repository.js";
+import { GoalRepository } from "../../data/repositories/goal.repository.js";
 
-import { RoadmapRepository } from "../../repositories/roadmap.repository.js";
+import { RoadmapRepository } from "../../data/repositories/roadmap.repository.js";
 
-import { dailyTaskService } from "../dashboard/dailytask.service.js";
+import { dailyTaskService } from "../dailytask/dailytask.service.js";
 
 export class RoadmapService {
+  static async getRoadmap(userId: string) {
+    // =========================================================
+    // GET USER GOAL
+    // =========================================================
+
+    const goal = await GoalRepository.getLatestGoal(userId);
+
+    if (!goal) {
+      throw new Error("No goal found");
+    }
+
+    // =========================================================
+    // GET ROADMAP
+    // =========================================================
+
+    const roadmap = await RoadmapRepository.getRoadmapByGoalId(goal.id);
+
+    if (!roadmap) {
+      throw new Error("No roadmap found");
+    }
+
+    // =========================================================
+    // GET PHASES WITH TASKS
+    // =========================================================
+
+    const phases = await RoadmapRepository.getPhasesWithTasks(roadmap.id);
+
+    return {
+      success: true,
+      data: {
+        roadmap: {
+          id: roadmap.id,
+          title: roadmap.title,
+          createdAt: roadmap.created_at,
+        },
+        goal: {
+          id: goal.id,
+          title: goal.title,
+          currentLevel: goal.current_level,
+        },
+        phases,
+      },
+    };
+  }
+
   static async generateRoadmap(userId: string, input: any) {
     // =========================================================
     // STEP 1 - CREATE USER GOAL

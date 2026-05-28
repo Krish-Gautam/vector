@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Crown } from "lucide-react";
+import { Crown, Settings, LogOut, User } from "lucide-react";
 
 import { sidebarGroups } from "./sidebarData";
 
@@ -14,33 +14,34 @@ type SidebarProps = {
 export default function Sidebar({ variant = "desktop", onNavigate }: SidebarProps) {
   const pathname = usePathname();
   const baseClasses =
-    "w-[280px] flex-col border-r border-white/10 bg-[#0B0B12] px-5 py-6";
+    "w-[260px] flex-col border-r border-zinc-800/50 bg-[#0A0A0A] px-4 py-5";
   const wrapperClasses =
     variant === "desktop" ? `hidden xl:flex ${baseClasses}` : `flex ${baseClasses}`;
 
   return (
     <aside className={wrapperClasses}>
-      <div className="mb-10 flex items-center gap-3">
-        <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-violet-500 to-indigo-500 font-bold text-white">
+      {/* Logo */}
+      <div className="mb-8 flex items-center gap-3 px-2">
+        <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-white font-bold text-black">
           V
         </div>
-
         <div>
-          <h1 className="text-lg font-bold tracking-wide text-white">
+          <h1 className="text-base font-bold text-white">
             VECTOR
           </h1>
-          <p className="text-xs text-zinc-500">Execution OS</p>
+          <p className="text-[10px] text-zinc-500">Execution OS</p>
         </div>
       </div>
 
-      <div className="flex-1 space-y-8">
+      {/* Navigation */}
+      <nav className="flex-1 space-y-6">
         {sidebarGroups.map((group) => (
           <div key={group.section}>
-            <p className="mb-3 px-3 text-[11px] font-semibold tracking-[0.2em] text-zinc-500">
+            <p className="mb-2 px-3 text-[10px] font-semibold tracking-wider text-zinc-600 uppercase">
               {group.section}
             </p>
 
-            <div className="space-y-1">
+            <div className="space-y-0.5">
               {group.items.map((item) => {
                 const Icon = item.icon;
                 const isActive =
@@ -52,13 +53,13 @@ export default function Sidebar({ variant = "desktop", onNavigate }: SidebarProp
                     href={item.href}
                     onClick={onNavigate}
                     aria-current={isActive ? "page" : undefined}
-                    className={`flex w-full items-center gap-3 rounded-xl px-4 py-3 text-sm font-medium transition-all ${
+                    className={`flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors ${
                       isActive
-                        ? "border border-violet-500/20 bg-violet-500/15 text-violet-300"
-                        : "text-zinc-400 hover:bg-white/5 hover:text-white"
+                        ? "bg-white text-black"
+                        : "text-zinc-400 hover:bg-zinc-900 hover:text-white"
                     }`}
                   >
-                    <Icon size={18} />
+                    <Icon size={18} strokeWidth={2} />
                     {item.label}
                   </Link>
                 );
@@ -66,21 +67,29 @@ export default function Sidebar({ variant = "desktop", onNavigate }: SidebarProp
             </div>
           </div>
         ))}
-      </div>
+      </nav>
 
-      <div className="mt-6 rounded-3xl border border-violet-500/20 bg-gradient-to-br from-violet-500/10 to-indigo-500/10 p-5">
-        <div className="mb-4 flex h-12 w-12 items-center justify-center rounded-2xl bg-violet-500/20">
-          <Crown className="text-violet-300" />
-        </div>
-
-        <h3 className="text-lg font-semibold text-white">Upgrade to Pro</h3>
-
-        <p className="mt-2 text-sm leading-6 text-zinc-400">
-          Unlock advanced analytics, private circles, and AI execution tools.
-        </p>
-
-        <button className="mt-5 w-full rounded-2xl bg-violet-500 px-4 py-3 text-sm font-semibold text-white transition hover:bg-violet-400">
-          Upgrade Now
+      {/* Bottom Section */}
+      <div className="space-y-3 border-t border-zinc-800/50 pt-4">
+        <Link
+          href="/profile"
+          onClick={onNavigate}
+          className={`flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors ${
+            pathname === "/profile"
+              ? "bg-white text-black"
+              : "text-zinc-400 hover:bg-zinc-900 hover:text-white"
+          }`}
+        >
+          <User size={18} strokeWidth={2} />
+          Profile
+        </Link>
+        <button className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium text-zinc-400 transition-colors hover:bg-zinc-900 hover:text-white">
+          <Settings size={18} strokeWidth={2} />
+          Settings
+        </button>
+        <button className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium text-zinc-400 transition-colors hover:bg-zinc-900 hover:text-white">
+          <LogOut size={18} strokeWidth={2} />
+          Logout
         </button>
       </div>
     </aside>

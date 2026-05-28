@@ -1,5 +1,5 @@
 import { Response } from "express";
-import { AuthRequest } from "../middleware/authMiddleware.js";
+import { AuthRequest } from "./auth.middleware.js";
 
 export const getProfile = async (
   req: AuthRequest,

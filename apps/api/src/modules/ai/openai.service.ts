@@ -1,4 +1,4 @@
-import { openai } from "../../lib/openai.js";
+import { openai } from "../../data/openai.client.js";
 
 export class OpenAIService {
   static async generateRoadmap(

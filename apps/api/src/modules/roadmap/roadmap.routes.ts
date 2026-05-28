@@ -1,12 +1,18 @@
 import { Router }
 from "express";
-import verifyUser from "../middleware/authMiddleware.js";
+import verifyUser from "../auth/auth.middleware.js";
 
 import {
   RoadmapController,
-} from "../controllers/roadmap.controller.js";
+} from "./roadmap.controller.js";
 
 const router = Router();
+
+router.get(
+  "/",
+  verifyUser,
+  RoadmapController.get
+);
 
 router.post(
   "/generate",
