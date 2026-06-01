@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import Sidebar from "../components/Sidebar";
+import Sidebar from "../components/layout/Sidebar";
 import api from "../lib/api";
 import {
   Calendar,

@@ -5,7 +5,9 @@
 import { useEffect, useRef, useState } from "react";
 import Hls from "hls.js";
 import { ArrowRight, Menu, X } from "lucide-react";
-import Navbar from "./components/Navbar";
+import Navbar from "./components/layout/Navbar";
+import Footer from "./components/layout/Footer";
+import FeaturesSection from "./components/features/FeaturesSection";
 
 const navItems = ["PROJECTS", "BLOG", "ABOUT", "RESUME"];
 
@@ -42,7 +44,7 @@ export default function CodeNestHero() {
   }, []);
 
   return (
-    <main className="relative min-h-screen overflow-hidden bg-[#070b0a] text-white">
+    <main className="relative min-h-screen overflow-x-hidden bg-[#06060f] text-white">
       <Navbar />
       {/* ================= VIDEO ================= */}
       <video
@@ -55,10 +57,10 @@ export default function CodeNestHero() {
       />
 
       {/* Left Gradient */}
-      <div className="absolute inset-0 bg-gradient-to-r from-[#070b0a] via-[#070b0ad9] to-transparent" />
+      <div className="absolute inset-0 bg-gradient-to-r from-[#06060f] via-[#06060fd9] to-transparent" />
 
       {/* Bottom Gradient */}
-      <div className="absolute inset-0 bg-gradient-to-t from-[#070b0a] via-[#070b0a80] to-transparent" />
+      <div className="absolute inset-0 bg-gradient-to-t from-[#06060f] via-[#06060f80] to-transparent" />
 
       {/* ================= GRID LINES ================= */}
       <div className="pointer-events-none absolute inset-0 hidden md:block">
@@ -67,45 +69,11 @@ export default function CodeNestHero() {
         <div className="absolute left-3/4 top-0 h-full w-px bg-white/10" />
       </div>
 
-      {/* ================= GLOW ================= */}
-      <div className="pointer-events-none absolute left-1/2 top-0 -translate-x-1/2">
-        <svg
-          width="900"
-          height="400"
-          viewBox="0 0 900 400"
-          fill="none"
-          xmlns="http://www.w3.org/2000/svg"
-          className="opacity-70"
-        >
-          <g filter="url(#blur)">
-            <ellipse
-              cx="450"
-              cy="120"
-              rx="260"
-              ry="70"
-              fill="#5ed29c"
-              fillOpacity="0.25"
-            />
-          </g>
-
-          <defs>
-            <filter
-              id="blur"
-              x="0"
-              y="0"
-              width="900"
-              height="400"
-              filterUnits="userSpaceOnUse"
-            >
-              <feGaussianBlur stdDeviation="25" />
-            </filter>
-          </defs>
-        </svg>
-      </div>
+     
 
       {/* ================= MOBILE MENU ================= */}
       <div
-        className={`fixed inset-0 z-[100] bg-[#070b0a] transition-all duration-300 ${
+        className={`fixed inset-0 z-[100] bg-[#06060f] transition-all duration-300 ${
           mobileMenu
             ? "pointer-events-auto opacity-100"
             : "pointer-events-none opacity-0"
@@ -113,7 +81,7 @@ export default function CodeNestHero() {
       >
         <div className="flex items-center justify-between px-6 py-6">
           <div className="flex items-center gap-3">
-            <div className="h-3 w-3 rounded-full bg-[#5ed29c]" />
+            <div className="h-3 w-3 rounded-full bg-[#4f8cff]" />
 
             <span className="text-lg font-semibold">CodeNest</span>
           </div>
@@ -132,7 +100,7 @@ export default function CodeNestHero() {
               key={item}
               href="#"
               onClick={() => setMobileMenu(false)}
-              className="text-3xl font-bold tracking-tight text-white transition-colors hover:text-[#5ed29c]"
+              className="text-3xl font-bold tracking-tight text-white transition-colors hover:text-[#7fb8ff]"
             >
               {item}
             </a>
@@ -141,18 +109,18 @@ export default function CodeNestHero() {
       </div>
 
       {/* ================= HERO ================= */}
-      <section className="relative z-10 flex min-h-screen items-center">
+      <section className="relative  flex min-h-screen items-center">
         <div className="mx-auto flex w-full max-w-7xl flex-col px-6 pt-32 md:px-10">
 
           {/* Eyebrow */}
-          <span className="mb-5 text-[11px] font-bold uppercase tracking-[0.2em] text-[#5ed29c]">
+          <span className="mb-5 text-[11px] font-bold uppercase tracking-[0.2em] text-[#7fb8ff]">
             Career-Ready Curriculum
           </span>
 
           {/* Headline */}
           <div className="max-w-5xl text-[30px] font-bold uppercase leading-[0.95] tracking-tight sm:text-[52px] md:text-[64px] lg:text-[72px]">
             Stop Planning. <br />Start Executing
-            <span className="text-[#5ed29c]">.</span>
+            <span className="text-[#7fb8ff]">.</span>
           </div>
 
           {/* Description */}
@@ -162,14 +130,14 @@ export default function CodeNestHero() {
 
           {/* CTA */}
           <div className="mt-10 flex gap-2">
-            <button className="group inline-flex items-center gap-3 rounded-full bg-[#5ed29c] px-7 py-4 text-sm font-bold uppercase tracking-wide text-[#070b0a] transition-all duration-300 hover:scale-[1.02]">
+            <button className="group inline-flex items-center gap-3 rounded-full bg-[#4f8cff] px-7 py-4 text-sm font-bold uppercase tracking-wide text-[#06060f] transition-all duration-300 hover:scale-[1.02] hover:bg-[#3f78e6]">
               Start for free
 
               <span className="transition-transform duration-300 group-hover:translate-x-1">
                 <ArrowRight size={18} strokeWidth={2.5} />
               </span>
             </button>
-            <button className="group inline-flex items-center gap-3 rounded-full bg-[#5ed29c] px-7 py-4 text-sm font-bold uppercase tracking-wide text-[#070b0a] transition-all duration-300 hover:scale-[1.02]">
+            <button className="group inline-flex items-center gap-3 rounded-full border border-[#7fb8ff]/40 px-7 py-4 text-sm font-bold uppercase tracking-wide text-[#7fb8ff] transition-all duration-300 hover:scale-[1.02] hover:bg-[#7fb8ff]/10">
               Explore Plus
 
               <span className="transition-transform duration-300 group-hover:translate-x-1">
@@ -179,6 +147,14 @@ export default function CodeNestHero() {
           </div>
         </div>
       </section>
+      <section className="relative z-10  flex min-h-screen items-center">
+        <FeaturesSection />
+      </section>
+
+      <div className="relative z-10">
+        <Footer />
+      </div>
+
     </main>
   );
 }

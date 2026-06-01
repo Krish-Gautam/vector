@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { Crown, Settings, LogOut, User } from "lucide-react";
-
+import Image from "next/image";
 import { sidebarGroups } from "./sidebarData";
 
 type SidebarProps = {
@@ -14,22 +14,30 @@ type SidebarProps = {
 export default function Sidebar({ variant = "desktop", onNavigate }: SidebarProps) {
   const pathname = usePathname();
   const baseClasses =
-    "w-[260px] flex-col border-r border-zinc-800/50 bg-[#0A0A0A] px-4 py-5";
+    "w-[260px] flex-col border-r border-zinc-800/50 bg-[#0A0A0A] px-4 py-2";
   const wrapperClasses =
     variant === "desktop" ? `hidden xl:flex ${baseClasses}` : `flex ${baseClasses}`;
 
   return (
     <aside className={wrapperClasses}>
       {/* Logo */}
-      <div className="mb-8 flex items-center gap-3 px-2">
-        <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-white font-bold text-black">
-          V
-        </div>
-        <div>
-          <h1 className="text-base font-bold text-white">
-            VECTOR
-          </h1>
-          <p className="text-[10px] text-zinc-500">Execution OS</p>
+      <div className="mb-8 flex items-center px-2">
+        <Link href="/" className="">
+          <Image
+            src="/bird.png"
+            alt="Vector Logo"
+            width={50}
+            height={50}
+          />
+        </Link>
+        <div className="mt-3">
+          <Image
+            src="/vector1.png"
+            alt="Vector Logo"
+            width={100}
+            height={100}
+          />
+          <p className="text-[10px] text-zinc-500 ml-2">Execution OS</p>
         </div>
       </div>
 

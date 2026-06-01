@@ -6,7 +6,7 @@ import HeroSection from "./components/HeroSection";
 import MembersSection from "./components/MembersSection";
 import MotivationCard from "./components/MotivationCard";
 import RightRail from "./components/RightRail";
-import Sidebar from "../components/Sidebar";
+import Sidebar from "../components/layout/Sidebar";
 import StatsSection from "./components/StatsSection";
 import Topbar from "./components/Topbar";
 

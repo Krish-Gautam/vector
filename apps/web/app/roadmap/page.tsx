@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import Sidebar from "../components/Sidebar";
+import Sidebar from "../components/layout/Sidebar";
 import api from "../lib/api";
 import {
   Calendar,
@@ -138,8 +138,6 @@ export default function RoadmapPage() {
     },
   } as const;
 
-  const roadmap = roadmapData?.data?.roadmap;
-  const goal = roadmapData?.data?.goal;
   const phases = roadmapData?.data?.phases || [];
 
    const phaseById = useMemo(
@@ -213,7 +211,7 @@ export default function RoadmapPage() {
     );
   }
 
- 
+  const { roadmap, goal } = roadmapData.data;
   const totalTasks = phases.reduce((sum, phase) => sum + phase.tasks.length, 0);
   const completedTasks = phases.reduce(
     (sum, phase) => sum + phase.tasks.filter((t) => t.completed).length,
@@ -318,7 +316,13 @@ export default function RoadmapPage() {
                   <select
                     value={difficultyFilter}
                     onChange={(event) =>
-                      setDifficultyFilter(event.target.value)
+                      setDifficultyFilter(
+                        event.target.value as
+                          | "ALL"
+                          | "EASY"
+                          | "MEDIUM"
+                          | "HARD"
+                      )
                     }
                     className="w-[170px] rounded-xl border border-zinc-800 bg-zinc-950/40 pl-9 pr-8 py-2 text-xs text-zinc-200 focus:border-zinc-600 focus:outline-none"
                   >

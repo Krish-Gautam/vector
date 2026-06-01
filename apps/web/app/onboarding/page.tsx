@@ -1,14 +1,18 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Brain, ArrowRight } from "lucide-react";
+import { Brain, ArrowRight, Sparkles } from "lucide-react";
+import { motion } from "framer-motion";
 import api from "../lib/api";
 
 export default function OnboardingPage() {
   const router = useRouter();
 
   const [loading, setLoading] = useState(false);
+  const [checkingRoadmap, setCheckingRoadmap] = useState(true);
+  const [checkError, setCheckError] = useState<string | null>(null);
+  const [checkNonce, setCheckNonce] = useState(0);
 
   const [form, setForm] = useState({
     goal: "",
@@ -32,102 +36,231 @@ export default function OnboardingPage() {
     }
   };
 
-  return (
-    <div className="min-h-screen bg-black text-white flex items-center justify-center px-6">
-      <div className="w-full max-w-3xl bg-zinc-950 border border-zinc-800 rounded-3xl p-10">
-        <div className="flex items-center gap-3 mb-8">
-          <div className="w-12 h-12 rounded-2xl bg-violet-500/20 flex items-center justify-center">
-            <Brain className="w-6 h-6 text-violet-400" />
-          </div>
+  useEffect(() => {
+    let active = true;
 
-          <div>
-            <h1 className="text-3xl font-bold">
-              Build Your AI Roadmap
+    const checkRoadmap = async () => {
+      setCheckError(null);
+
+      try {
+        await api.get("/api/roadmap");
+
+        if (active) {
+          router.replace("/dashboard");
+        }
+      } catch (error) {
+        const message =
+          typeof error === "object" && error && "response" in error
+            ? (error as { response?: { data?: { error?: string } } }).response
+                ?.data?.error
+            : null;
+
+        const isMissingRoadmap =
+          message?.toLowerCase().includes("no roadmap") ||
+          message?.toLowerCase().includes("no goal");
+
+        if (!isMissingRoadmap) {
+          console.error("Failed to verify roadmap:", error);
+          if (active) {
+            setCheckError("Unable to verify your roadmap. Please try again.");
+          }
+        }
+
+        if (active) {
+          setCheckingRoadmap(false);
+        }
+      }
+    };
+
+    checkRoadmap();
+
+    return () => {
+      active = false;
+    };
+  }, [router, checkNonce]);
+
+  if (checkingRoadmap) {
+    return (
+      <div className="relative min-h-screen bg-black text-white">
+        <div className="absolute inset-0 bg-[radial-gradient(circle_at_top,_rgba(255,255,255,0.08),_transparent_55%)]" />
+        <div className="relative mx-auto flex min-h-screen max-w-4xl items-center justify-center px-6">
+          <div className="rounded-3xl border border-white/10 bg-zinc-950/80 px-8 py-10 text-center">
+            <p className="text-sm uppercase tracking-[0.2em] text-white/60">Checking access</p>
+            <p className="mt-3 text-lg text-white/80">Verifying your roadmap status...</p>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (checkError) {
+    return (
+      <div className="relative min-h-screen bg-black text-white">
+        <div className="absolute inset-0 bg-[radial-gradient(circle_at_top,_rgba(255,255,255,0.08),_transparent_55%)]" />
+        <div className="relative mx-auto flex min-h-screen max-w-4xl items-center justify-center px-6">
+          <div className="rounded-3xl border border-white/10 bg-zinc-950/80 px-8 py-10 text-center">
+            <p className="text-sm uppercase tracking-[0.2em] text-white/60">Access check failed</p>
+            <p className="mt-3 text-lg text-white/80">{checkError}</p>
+            <button
+              onClick={() => {
+                setCheckError(null);
+                setCheckingRoadmap(true);
+                setCheckNonce((prev) => prev + 1);
+              }}
+              className="mt-6 rounded-full border border-white/20 px-5 py-2 text-sm font-semibold text-white transition hover:border-white/40 hover:bg-white/5"
+            >
+              Retry
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="relative min-h-screen overflow-hidden bg-black text-white">
+      <div className="pointer-events-none absolute inset-0">
+        <div className="absolute -left-40 top-20 h-[420px] w-[420px] rounded-full bg-white/5 blur-[120px]" />
+        <div className="absolute -right-32 bottom-10 h-[360px] w-[360px] rounded-full bg-white/10 blur-[140px]" />
+        <div className="absolute inset-0 bg-[radial-gradient(circle_at_top,_rgba(255,255,255,0.08),_transparent_55%)]" />
+      </div>
+
+      <div className="relative mx-auto flex min-h-screen max-w-6xl items-center px-6 py-16">
+        <motion.div
+          initial={{ opacity: 0, y: 24 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.6, ease: "easeOut" }}
+          className="grid w-full gap-10 lg:grid-cols-[1.05fr_1fr]"
+        >
+          <div className="flex flex-col justify-center gap-6">
+            <div className="inline-flex items-center gap-3 rounded-full border border-white/10 bg-white/5 px-4 py-2 text-xs uppercase tracking-[0.2em] text-white/70">
+              <Sparkles className="h-4 w-4" />
+              Personalized Onboarding
+            </div>
+
+            <h1 className="text-4xl font-semibold leading-tight md:text-5xl">
+              Build a roadmap that feels deliberate and achievable.
             </h1>
 
-            <p className="text-zinc-400 text-sm mt-1">
-              Tell the AI your target and current level
+            <p className="text-lg text-white/70">
+              Share your goal, timeline, and daily availability. We will craft a focused plan with AI guidance and clear milestones.
             </p>
+
+            <div className="grid gap-4 sm:grid-cols-2">
+              {[
+                "Goal clarity and milestones",
+                "Adaptive pacing suggestions",
+                "Weekly checkpoints",
+                "Progress signals",
+              ].map((item) => (
+                <motion.div
+                  key={item}
+                  initial={{ opacity: 0, y: 12 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ duration: 0.5, ease: "easeOut" }}
+                  className="rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-white/80"
+                >
+                  {item}
+                </motion.div>
+              ))}
+            </div>
           </div>
-        </div>
 
-        <div className="grid md:grid-cols-2 gap-5">
-          <input
-            placeholder="Goal (FAANG, DSA, ML, etc)"
-            className="bg-zinc-900 border border-zinc-800 rounded-2xl px-4 py-4 outline-none"
-            value={form.goal}
-            onChange={(e) =>
-              setForm({
-                ...form,
-                goal: e.target.value,
-              })
-            }
-          />
-
-          <select
-            className="bg-zinc-900 border border-zinc-800 rounded-2xl px-4 py-4 outline-none"
-            value={form.currentLevel}
-            onChange={(e) =>
-              setForm({
-                ...form,
-                currentLevel: e.target.value,
-              })
-            }
+          <motion.div
+            initial={{ opacity: 0, y: 18 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.6, ease: "easeOut", delay: 0.1 }}
+            className="w-full rounded-[32px] border border-white/10 bg-zinc-950/90 p-8 shadow-[0_35px_120px_rgba(0,0,0,0.7)] backdrop-blur"
           >
-            <option value="">Current Level</option>
-            <option value="beginner">Beginner</option>
-            <option value="intermediate">Intermediate</option>
-            <option value="advanced">Advanced</option>
-          </select>
+            <div className="flex items-center gap-3">
+              <div className="flex h-12 w-12 items-center justify-center rounded-2xl border border-white/10 bg-white/5">
+                <Brain className="h-6 w-6 text-white" />
+              </div>
+              <div>
+                <h2 className="text-2xl font-semibold">Build Your AI Roadmap</h2>
+                <p className="text-sm text-white/60">Tell the AI your target and current level</p>
+              </div>
+            </div>
 
-          <input
-            placeholder="Duration (6 months)"
-            className="bg-zinc-900 border border-zinc-800 rounded-2xl px-4 py-4 outline-none"
-            value={form.duration}
-            onChange={(e) =>
-              setForm({
-                ...form,
-                duration: e.target.value,
-              })
-            }
-          />
+            <div className="mt-8 grid gap-5 md:grid-cols-2">
+              <input
+                placeholder="Goal (FAANG, DSA, ML, etc)"
+                className="rounded-2xl border border-white/10 bg-black/60 px-4 py-4 text-sm text-white outline-none transition focus:border-white/30 focus:bg-black"
+                value={form.goal}
+                onChange={(e) =>
+                  setForm({
+                    ...form,
+                    goal: e.target.value,
+                  })
+                }
+              />
 
-          <input
-            placeholder="Daily Study Hours"
-            className="bg-zinc-900 border border-zinc-800 rounded-2xl px-4 py-4 outline-none"
-            value={form.dailyHours}
-            onChange={(e) =>
-              setForm({
-                ...form,
-                dailyHours: e.target.value,
-              })
-            }
-          />
+              <select
+                className="rounded-2xl border border-white/10 bg-black/60 px-4 py-4 text-sm text-white outline-none transition focus:border-white/30 focus:bg-black"
+                value={form.currentLevel}
+                onChange={(e) =>
+                  setForm({
+                    ...form,
+                    currentLevel: e.target.value,
+                  })
+                }
+              >
+                <option value="">Current Level</option>
+                <option value="beginner">Beginner</option>
+                <option value="intermediate">Intermediate</option>
+                <option value="advanced">Advanced</option>
+              </select>
 
-          <input
-            placeholder="Target Company"
-            className="bg-zinc-900 border border-zinc-800 rounded-2xl px-4 py-4 outline-none md:col-span-2"
-            value={form.targetCompany}
-            onChange={(e) =>
-              setForm({
-                ...form,
-                targetCompany: e.target.value,
-              })
-            }
-          />
-        </div>
+              <input
+                placeholder="Duration (6 months)"
+                className="rounded-2xl border border-white/10 bg-black/60 px-4 py-4 text-sm text-white outline-none transition focus:border-white/30 focus:bg-black"
+                value={form.duration}
+                onChange={(e) =>
+                  setForm({
+                    ...form,
+                    duration: e.target.value,
+                  })
+                }
+              />
 
-        <button
-          onClick={handleSubmit}
-          disabled={loading}
-          className="mt-8 w-full bg-violet-600 hover:bg-violet-500 transition-all rounded-2xl py-4 font-semibold flex items-center justify-center gap-2"
-        >
-          {loading
-            ? "Generating AI Roadmap..."
-            : "Generate Roadmap"}
+              <input
+                placeholder="Daily Study Hours"
+                className="rounded-2xl border border-white/10 bg-black/60 px-4 py-4 text-sm text-white outline-none transition focus:border-white/30 focus:bg-black"
+                value={form.dailyHours}
+                onChange={(e) =>
+                  setForm({
+                    ...form,
+                    dailyHours: e.target.value,
+                  })
+                }
+              />
 
-          <ArrowRight className="w-5 h-5" />
-        </button>
+              <input
+                placeholder="Target Company"
+                className="rounded-2xl border border-white/10 bg-black/60 px-4 py-4 text-sm text-white outline-none transition focus:border-white/30 focus:bg-black md:col-span-2"
+                value={form.targetCompany}
+                onChange={(e) =>
+                  setForm({
+                    ...form,
+                    targetCompany: e.target.value,
+                  })
+                }
+              />
+            </div>
+
+            <motion.button
+              whileHover={{ y: -2 }}
+              whileTap={{ scale: 0.98 }}
+              onClick={handleSubmit}
+              disabled={loading}
+              className="mt-8 flex w-full items-center justify-center gap-2 rounded-2xl bg-white py-4 text-sm font-semibold text-black transition hover:bg-zinc-200"
+            >
+              {loading ? "Generating AI Roadmap..." : "Generate Roadmap"}
+
+              <ArrowRight className="h-5 w-5" />
+            </motion.button>
+          </motion.div>
+        </motion.div>
       </div>
     </div>
   );
