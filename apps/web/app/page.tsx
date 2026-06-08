@@ -69,51 +69,14 @@ export default function CodeNestHero() {
         <div className="absolute left-3/4 top-0 h-full w-px bg-white/10" />
       </div>
 
-     
-
-      {/* ================= MOBILE MENU ================= */}
-      <div
-        className={`fixed inset-0 z-[100] bg-[#06060f] transition-all duration-300 ${
-          mobileMenu
-            ? "pointer-events-auto opacity-100"
-            : "pointer-events-none opacity-0"
-        }`}
-      >
-        <div className="flex items-center justify-between px-6 py-6">
-          <div className="flex items-center gap-3">
-            <div className="h-3 w-3 rounded-full bg-[#4f8cff]" />
-
-            <span className="text-lg font-semibold">CodeNest</span>
-          </div>
-
-          <button
-            onClick={() => setMobileMenu(false)}
-            className="flex h-11 w-11 items-center justify-center rounded-full border border-white/10 bg-white/5"
-          >
-            <X size={20} />
-          </button>
-        </div>
-
-        <div className="flex h-[80vh] flex-col items-center justify-center gap-10">
-          {navItems.map((item) => (
-            <a
-              key={item}
-              href="#"
-              onClick={() => setMobileMenu(false)}
-              className="text-3xl font-bold tracking-tight text-white transition-colors hover:text-[#7fb8ff]"
-            >
-              {item}
-            </a>
-          ))}
-        </div>
-      </div>
+      
 
       {/* ================= HERO ================= */}
-      <section className="relative  flex min-h-screen items-center">
-        <div className="mx-auto flex w-full max-w-7xl flex-col px-6 pt-32 md:px-10">
+      <section className="relative  flex min-h-[50vh] md:min-h-screen items-center">
+        <div className="mx-auto flex w-full max-w-7xl flex-col px-6 pt-32 pb-20 text-center md:text-left md:px-10">
 
           {/* Eyebrow */}
-          <span className="mb-5 text-[11px] font-bold uppercase tracking-[0.2em] text-[#7fb8ff]">
+          <span className="mb-5 text-[11px]  font-bold uppercase tracking-[0.2em] text-[#7fb8ff]">
             Career-Ready Curriculum
           </span>
 

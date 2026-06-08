@@ -3,7 +3,6 @@ import {
   BarChart3,
   Brain,
   CheckSquare,
-  Home,
   LayoutDashboard,
   Map,
   ShieldCheck,
@@ -28,7 +27,6 @@ export const sidebarGroups: SidebarGroup[] = [
   {
     section: "MAIN",
     items: [
-      { icon: Home, label: "Home", href: "/home" },
       { icon: LayoutDashboard, label: "Dashboard", href: "/dashboard" },
       { icon: Map, label: "My Roadmap", href: "/roadmap" },
       { icon: CheckSquare, label: "Tasks", href: "/tasks" },

@@ -51,7 +51,7 @@ export default function Footer() {
 
             <span className="text-white/20">|</span>
 
-            <Link href="/terms" className="transition-colors hover:text-white">
+            <Link href="/terms-and-conditions" className="transition-colors hover:text-white">
               Terms and Conditions
             </Link>
 

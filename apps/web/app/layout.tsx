@@ -22,8 +22,13 @@ const instrument = Instrument_Serif({
 });
 
 export const metadata: Metadata = {
-  title: "Vector",
-  description: "",
+  title: "Vector | AI-Powered Goal Tracking & Accountability",
+  description:   "AI-powered roadmaps and goal-focused communities to help you stay accountable and achieve more.",
+  icons: {
+    icon: [
+      { url: "/icon.png", sizes: "192x192" },
+    ],
+  },
 };
 
 export default function RootLayout({

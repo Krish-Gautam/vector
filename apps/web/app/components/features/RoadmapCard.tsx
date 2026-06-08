@@ -1,70 +1,243 @@
 "use client";
 
-import { motion, useAnimationControls } from "framer-motion";
-import { useEffect, useState } from "react";
+import { motion, useReducedMotion } from "framer-motion";
+import { useEffect, useMemo, useState } from "react";
 import { Target, Lock, Trophy, MessageSquareMore, Network } from "lucide-react";
+import type { LucideIcon } from "lucide-react";
 
-// SVG coordinate system: viewBox="0 0 640 400"
-// Node centers (where orb should "arrive"):
-//   Node 0 (Structured Learning):  cx=100, cy=100
-//   Node 1 (Focused Practice):     cx=300, cy=100
-//   Node 2 (Expert Feedback):      cx=300, cy=280
-//   Node 3 (Dream Offer):          cx=520, cy=280
+type DiagramNode = {
+  title: string;
+  icon: LucideIcon;
+  /** Anchor point — path, orb, and box center */
+  x: number;
+  y: number;
+};
 
-const NODE_DEFS = [
-  { title: "Goal\nAnalysis",  icon: Network,          svgX: 100, svgY: 100, nodeIndex: 0 },
-  { title: "Daily\nTasks",     icon: Lock,             svgX: 300, svgY: 100, nodeIndex: 1 },
-  { title: "Progress\nTracking",      icon: MessageSquareMore,svgX: 300, svgY: 280, nodeIndex: 2 },
-  { title: "Dream\nOffer",          icon: Trophy,           svgX: 520, svgY: 280, nodeIndex: 3 },
+type DiagramLayout = {
+  id: "mobile" | "desktop";
+  viewBox: { w: number; h: number };
+  maxWidth: number;
+  nodeW: number;
+  nodeH: number;
+  iconSize: number;
+  titleSize: number;
+  nodes: DiagramNode[];
+  orbRadii: [number, number, number];
+  trackWidth: number;
+};
+
+const MOBILE_LAYOUT: DiagramLayout = {
+  id: "mobile",
+  viewBox: { w: 360, h: 320 },
+  maxWidth: 420,
+  nodeW: 96,
+  nodeH: 78,
+  iconSize: 17,
+  titleSize: 10.5,
+  // 2×2 zigzag: TL → TR → BL → BR (true cross, not stacked on the right)
+  nodes: [
+    { title: "Goal\nAnalysis", icon: Network, x: 50, y: 88 },
+    { title: "Daily\nTasks", icon: Lock, x: 180, y: 88 },
+    { title: "Progress\nTracking", icon: MessageSquareMore, x: 180, y: 218 },
+    { title: "Dream\nOffer", icon: Trophy, x: 310, y: 218 },
+  ],
+  orbRadii: [12, 7, 3.5],
+  trackWidth: 1.75,
+};
+
+const DESKTOP_LAYOUT: DiagramLayout = {
+  id: "desktop",
+  viewBox: { w: 640, h: 400 },
+  maxWidth: 640,
+  nodeW: 130,
+  nodeH: 100,
+  iconSize: 25,
+  titleSize: 13,
+  nodes: [
+    { title: "Goal\nAnalysis", icon: Network, x: 100, y: 100 },
+    { title: "Daily\nTasks", icon: Lock, x: 300, y: 100 },
+    { title: "Progress\nTracking", icon: MessageSquareMore, x: 300, y: 280 },
+    { title: "Dream\nOffer", icon: Trophy, x: 520, y: 280 },
+  ],
+  orbRadii: [22, 13, 6],
+  trackWidth: 2,
+};
+
+const ORB_DURATION = 5;
+const ARRIVE_AT = [
+  0,
+  ORB_DURATION * (1 / 3),
+  ORB_DURATION * (2 / 3),
+  ORB_DURATION - 0.05,
 ];
 
-// Orb visits each node center in sequence
-const ORB_X = [100, 300, 300, 520];
-const ORB_Y = [100, 100, 280, 280];
+function buildPath(nodes: DiagramNode[]) {
+  return nodes
+    .map((node, index) => `${index === 0 ? "M" : "L"}${node.x} ${node.y}`)
+    .join(" ");
+}
 
-// Duration per segment (total = ORB_DURATION)
-const ORB_DURATION = 5;
-
-// When (in seconds) the orb arrives at each node during one cycle
-// Segments: 0→1 (200px horiz), 1→2 (180px vert), 2→3 (220px horiz) ≈ equal time thirds
-const ARRIVE_AT = [0, ORB_DURATION * (1/3), ORB_DURATION * (2/3), ORB_DURATION - 0.05];
-
-export default function RoadmapCard() {
-  // Which nodes are "active" — orb arrival toggles them on, then resets each cycle
-  const [activeNodes, setActiveNodes] = useState<Set<number>>(new Set([0]));
+function useDiagramLayout() {
+  const [layout, setLayout] = useState<DiagramLayout>(MOBILE_LAYOUT);
 
   useEffect(() => {
-    // Activate node 0 immediately (orb starts there)
-    setActiveNodes(new Set([0]));
+    const mq = window.matchMedia("(min-width: 640px)");
+    const sync = () => setLayout(mq.matches ? DESKTOP_LAYOUT : MOBILE_LAYOUT);
+    sync();
+    mq.addEventListener("change", sync);
+    return () => mq.removeEventListener("change", sync);
+  }, []);
 
+  return layout;
+}
+
+type NodeCardProps = {
+  node: DiagramNode;
+  index: number;
+  isActive: boolean;
+  layout: DiagramLayout;
+  interactive: boolean;
+};
+
+function NodeCard({ node, index, isActive, layout, interactive }: NodeCardProps) {
+  const Icon = node.icon;
+  const halfW = layout.nodeW / 2;
+  const halfH = layout.nodeH / 2;
+  const padding = layout.id === "mobile" ? 10 : 14;
+
+  return (
+    <foreignObject
+      x={node.x - halfW}
+      y={node.y - halfH}
+      width={layout.nodeW}
+      height={layout.nodeH}
+      className="overflow-visible"
+    >
+      <motion.div
+        {...({ xmlns: "http://www.w3.org/1999/xhtml" } as object)}
+        initial={{ opacity: 0, scale: 0.82 }}
+        whileInView={{ opacity: 1, scale: 1 }}
+        viewport={{ once: true }}
+        transition={{
+          duration: 0.45,
+          delay: index * 0.12,
+          ease: [0.22, 1, 0.36, 1],
+        }}
+        whileHover={interactive ? { scale: 1.04 } : undefined}
+        animate={{
+          borderColor: isActive ? "rgba(79,140,255,0.45)" : "#1f1f1f",
+          boxShadow: isActive
+            ? layout.id === "mobile"
+              ? "0 0 0 1px rgba(79,140,255,0.12), 0 0 16px rgba(127,184,255,0.2)"
+              : "0 0 0 1px rgba(79,140,255,0.12), 0 0 24px rgba(127,184,255,0.2)"
+            : layout.id === "mobile"
+              ? "0 2px 10px rgba(0,0,0,0.5)"
+              : "0 4px 16px rgba(0,0,0,0.5)",
+        }}
+        className={`relative box-border h-full w-full cursor-default select-none border ${
+          layout.id === "mobile" ? "rounded-xl" : "rounded-2xl"
+        }`}
+        style={{
+          padding,
+          background: isActive
+            ? "linear-gradient(145deg, #0b1426, #070a14)"
+            : "#070707",
+          transition:
+            "background 0.4s ease, border-color 0.4s ease, box-shadow 0.4s ease",
+        }}
+      >
+        <Icon
+          size={layout.iconSize}
+          style={{
+            color: isActive ? "#7fb8ff" : "#52525b",
+            transition: "color 0.4s ease",
+          }}
+        />
+        <p
+          className="mt-2 whitespace-pre-line font-semibold leading-snug"
+          style={{
+            fontSize: layout.titleSize,
+            color: isActive ? "#a9c6ff" : "#71717a",
+            transition: "color 0.4s ease",
+          }}
+        >
+          {node.title}
+        </p>
+        <motion.span
+          className={`absolute rounded-full ${
+            layout.id === "mobile"
+              ? "top-2 right-2 size-1.5"
+              : "top-2.5 right-2.5 size-2"
+          }`}
+          animate={{
+            backgroundColor: isActive ? "#4f8cff" : "#27272a",
+            opacity: isActive ? [1, 0.4, 1] : 1,
+          }}
+          transition={{
+            backgroundColor: { duration: 0.4 },
+            opacity: { duration: 1.8, repeat: Infinity },
+          }}
+        />
+      </motion.div>
+    </foreignObject>
+  );
+}
+
+export default function RoadmapCard() {
+  const layout = useDiagramLayout();
+  const reduceMotion = useReducedMotion();
+
+  const [activeNodes, setActiveNodes] = useState<Set<number>>(
+    () => new Set([0, 1, 2, 3]),
+  );
+
+  const pathD = useMemo(() => buildPath(layout.nodes), [layout]);
+  const orbKeyframes = useMemo(() => {
+    const xs = layout.nodes.map((node) => node.x);
+    const ys = layout.nodes.map((node) => node.y);
+    const last = layout.nodes.length - 1;
+    return {
+      cx: [...xs, xs[last]],
+      cy: [...ys, ys[last]],
+    };
+  }, [layout]);
+
+  useEffect(() => {
+    if (reduceMotion) {
+      setActiveNodes(new Set([0, 1, 2, 3]));
+      return;
+    }
+
+    setActiveNodes(new Set([0]));
     const timers: ReturnType<typeof setTimeout>[] = [];
 
     const schedule = () => {
-      // Reset all at the start of each cycle except node 0
       setActiveNodes(new Set([0]));
-
       ARRIVE_AT.forEach((t, i) => {
-        if (i === 0) return; // node 0 already active
-        const id = setTimeout(() => {
-          setActiveNodes(prev => new Set([...prev, i]));
-        }, t * 1000);
-        timers.push(id);
+        if (i === 0) return;
+        timers.push(
+          setTimeout(() => {
+            setActiveNodes((prev) => new Set([...prev, i]));
+          }, t * 1000),
+        );
       });
     };
 
     schedule();
-    // Repeat every cycle
     const interval = setInterval(schedule, ORB_DURATION * 1000);
-
     return () => {
       timers.forEach(clearTimeout);
       clearInterval(interval);
     };
-  }, []);
+  }, [reduceMotion, layout.id]);
+
+  const trackGradId = `trackGrad-${layout.id}`;
+  const orbGlowId = `orbGlow-${layout.id}`;
+  const pathLength = layout.id === "mobile" ? 720 : 900;
+  const [outerR, midR, coreR] = layout.orbRadii;
 
   return (
-    <div className="relative overflow-hidden border-b border-zinc-500 min-h-[700px] bg-black flex flex-col justify-between">
-      {/* Subtle grain */}
+    <div className="relative flex h-full min-h-0 flex-col justify-between overflow-hidden bg-black">
       <div
         className="pointer-events-none absolute inset-0 opacity-[0.03]"
         style={{
@@ -73,197 +246,191 @@ export default function RoadmapCard() {
         }}
       />
 
-
-      <div className="relative p-6 sm:p-10 md:p-14 flex-1 flex flex-col justify-between">
-        {/* Header */}
+      <div className="relative flex flex-1 flex-col justify-between p-5 sm:p-10 md:p-14">
         <motion.div
           initial={{ opacity: 0, y: 16 }}
           whileInView={{ opacity: 1, y: 0 }}
           viewport={{ once: true }}
           transition={{ duration: 0.5 }}
         >
-          <h3 className="text-4xl font-bold uppercase mb-5 tracking-tight">
-            <span className="text-white">ADAPTIVE ROADMAPS </span>
+          <h3 className="mb-3 text-2xl font-bold uppercase tracking-tight sm:mb-5 sm:text-3xl md:text-4xl">
+            <span className="text-white">ADAPTIVE ROADMAPS</span>
           </h3>
-          <p className="text-zinc-400 text-lg leading-relaxed max-w-[650px]">
+          <p className="max-w-[650px] text-sm leading-relaxed text-zinc-400 md:text-lg">
             Start with a roadmap built around your goals and schedule.
           </p>
-          <p className="text-zinc-400 text-lg leading-relaxed max-w-[650px] mt-4">
-            As you progress, AI continuously analyzes your performance and automatically adjusts your roadmap to match your learning pace.
+          <p className="mt-3 max-w-[650px] text-sm leading-relaxed text-zinc-400 sm:mt-4 md:text-lg">
+            As you progress, AI continuously analyzes your performance and
+            automatically adjusts your roadmap to match your learning pace.
           </p>
         </motion.div>
 
-        {/* Diagram wrapper — uses padding so scaled content never clips */}
-        <div className="mt-12 w-full overflow-hidden">
-          {/* 
-            Strategy: use a fixed viewBox SVG for the diagram background/lines/orb,
-            and absolutely-position nodes on top using % coordinates.
-            The whole thing scales via a wrapper with aspect-ratio.
-          */}
+        <div className="mt-8 w-full min-h-0 flex-1 sm:mt-12">
           <div
-            className="relative mx-auto w-full max-w-[640px]"
-            style={{ aspectRatio: "640 / 400" }}
+            className="relative mx-auto w-full max-h-[min(52vh,420px)] sm:max-h-none"
+            style={{
+              maxWidth: layout.maxWidth,
+              aspectRatio: `${layout.viewBox.w} / ${layout.viewBox.h}`,
+            }}
           >
-            {/* Grid + Lines + Orb (SVG, fills parent) */}
             <svg
-              className="absolute inset-0 w-full h-full"
-              viewBox="0 0 640 400"
+              className="h-full w-full"
+              viewBox={`0 0 ${layout.viewBox.w} ${layout.viewBox.h}`}
               preserveAspectRatio="xMidYMid meet"
+              aria-hidden="true"
             >
-              {/* Grid */}
               <defs>
-                <pattern id="grid" width="80" height="80" patternUnits="userSpaceOnUse">
-                  <path d="M 80 0 L 0 0 0 80" fill="none" stroke="#222" strokeWidth="1"/>
-                </pattern>
-                <linearGradient id="trackGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+                <radialGradient
+                  id={`diagramFade-${layout.id}`}
+                  cx="50%"
+                  cy="50%"
+                  r="55%"
+                >
+                  <stop offset="0%" stopColor="#1a1a1a" stopOpacity="0.35" />
+                  <stop offset="100%" stopColor="#0a0a0a" stopOpacity="0" />
+                </radialGradient>
+                <linearGradient
+                  id={trackGradId}
+                  x1="0%"
+                  y1="0%"
+                  x2="100%"
+                  y2={layout.id === "mobile" ? "100%" : "0%"}
+                >
                   <stop offset="0%" stopColor="#4f8cff" stopOpacity="0.6" />
                   <stop offset="100%" stopColor="#7fb8ff" stopOpacity="0.15" />
                 </linearGradient>
-                <filter id="orbGlow">
-                  <feGaussianBlur stdDeviation="6" result="blur"/>
-                  <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
+                <filter id={orbGlowId}>
+                  <feGaussianBlur
+                    stdDeviation={layout.id === "mobile" ? 4 : 6}
+                    result="blur"
+                  />
+                  <feMerge>
+                    <feMergeNode in="blur" />
+                    <feMergeNode in="SourceGraphic" />
+                  </feMerge>
                 </filter>
               </defs>
-              <rect width="640" height="400" fill="url(#grid)" opacity="0.25" />
 
-              {/* Track background */}
-              <path
-                d="M100 100 L300 100 L300 280 L520 280"
-                stroke="#2a2a2a"
-                strokeWidth="3"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                fill="none"
+              <rect
+                width={layout.viewBox.w}
+                height={layout.viewBox.h}
+                fill={`url(#diagramFade-${layout.id})`}
               />
 
-              {/* Animated track draw-in */}
-              <motion.path
-                d="M100 100 L300 100 L300 280 L520 280"
-                stroke="url(#trackGrad)"
-                strokeWidth="2"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                fill="none"
-                strokeDasharray="900"
-                initial={{ strokeDashoffset: 900, opacity: 0 }}
-                whileInView={{ strokeDashoffset: 0, opacity: 1 }}
-                viewport={{ once: true }}
-                transition={{ duration: 1.2, ease: "easeInOut", delay: 0.3 }}
-              />
+              {/* Track + orb sit beneath node cards */}
+              <g>
+                <path
+                  d={pathD}
+                  stroke="#2a2a2a"
+                  strokeWidth={
+                    layout.trackWidth + (layout.id === "desktop" ? 1 : 0.25)
+                  }
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  fill="none"
+                />
 
-              {/* Orb — outer glow */}
-              <motion.circle
-                r="22"
-                fill="#4f8cff"
-                opacity={0.12}
-                filter="url(#orbGlow)"
-                animate={{ cx: ORB_X, cy: ORB_Y }}
-                transition={{ duration: ORB_DURATION, repeat: Infinity, ease: "linear" }}
-              />
-              {/* Orb — mid */}
-              <motion.circle
-                r="13"
-                fill="#6aa3ff"
-                opacity={0.4}
-                animate={{ cx: ORB_X, cy: ORB_Y }}
-                transition={{ duration: ORB_DURATION, repeat: Infinity, ease: "linear" }}
-              />
-              {/* Orb — core */}
-              <motion.circle
-                r="6"
-                fill="#7fb8ff"
-                opacity={1}
-                animate={{ cx: ORB_X, cy: ORB_Y }}
-                transition={{ duration: ORB_DURATION, repeat: Infinity, ease: "linear" }}
-              />
-            </svg>
-
-            {/* Nodes — positioned using % of the 640×400 coordinate space */}
-            {NODE_DEFS.map((node, i) => {
-              const Icon = node.icon;
-              const isActive = activeNodes.has(i);
-
-              // Convert SVG coords to % of 640×400, then offset by half the node size
-              // Node is 130px wide, 130px tall in the 640px space → 130/640 = ~20.3%
-              const leftPct = (node.svgX / 640) * 100;
-              const topPct = (node.svgY / 400) * 100;
-
-              return (
-                <motion.div
-                  key={i}
-                  initial={{ opacity: 0, scale: 0.8, y: 10 }}
-                  whileInView={{ opacity: 1, scale: 1, y: 0 }}
+                <motion.path
+                  d={pathD}
+                  stroke={`url(#${trackGradId})`}
+                  strokeWidth={layout.trackWidth}
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  fill="none"
+                  strokeDasharray={pathLength}
+                  initial={{ strokeDashoffset: pathLength, opacity: 0 }}
+                  whileInView={{ strokeDashoffset: 0, opacity: 1 }}
                   viewport={{ once: true }}
-                  transition={{ duration: 0.45, delay: i * 0.12, ease: [0.22, 1, 0.36, 1] }}
-                  whileHover={{ y: -5, scale: 1.04 }}
-                  animate={{
-                    borderColor: isActive ? "rgba(79,140,255,0.45)" : "#1f1f1f",
-                    boxShadow: isActive
-                      ? "0 0 0 1px rgba(79,140,255,0.12), 0 0 24px rgba(127,184,255,0.2)"
-                      : "0 4px 16px rgba(0,0,0,0.5)",
-                  }}
-                  className="absolute cursor-default select-none rounded-2xl border p-4"
-                  style={{
-                    // Centre the node on its SVG coordinate
-                    left: `calc(${leftPct}% - 65px)`,
-                    top: `calc(${topPct}% - 60px)`,
-                    width: 130,
-                    background: isActive
-                      ? "linear-gradient(145deg, #0b1426, #070a14)"
-                      : "#070707",
-                    transition: "background 0.4s ease, border-color 0.4s ease, box-shadow 0.4s ease",
-                  }}
-                >
-                  <motion.div
-                  >
-                    <Icon
-                      size={25}
-                      style={{
-                        color: isActive ? "#7fb8ff" : "#52525b",
-                        transition: "color 0.4s ease",
+                  transition={{ duration: 1.2, ease: "easeInOut", delay: 0.3 }}
+                />
+
+                {!reduceMotion && (
+                  <>
+                    <motion.circle
+                      r={outerR}
+                      fill="#4f8cff"
+                      opacity={0.12}
+                      filter={`url(#${orbGlowId})`}
+                      animate={{ cx: orbKeyframes.cx, cy: orbKeyframes.cy }}
+                      transition={{
+                        duration: ORB_DURATION,
+                        repeat: Infinity,
+                        ease: "linear",
                       }}
                     />
-                  </motion.div>
+                    <motion.circle
+                      r={midR}
+                      fill="#6aa3ff"
+                      opacity={0.4}
+                      animate={{ cx: orbKeyframes.cx, cy: orbKeyframes.cy }}
+                      transition={{
+                        duration: ORB_DURATION,
+                        repeat: Infinity,
+                        ease: "linear",
+                      }}
+                    />
+                    <motion.circle
+                      r={coreR}
+                      fill="#7fb8ff"
+                      animate={{ cx: orbKeyframes.cx, cy: orbKeyframes.cy }}
+                      transition={{
+                        duration: ORB_DURATION,
+                        repeat: Infinity,
+                        ease: "linear",
+                      }}
+                    />
+                  </>
+                )}
 
-                  <p
-                    className="mt-3 whitespace-pre-line font-semibold text-[13px] leading-snug"
-                    style={{
-                      color: isActive ? "#a9c6ff" : "#71717a",
-                      transition: "color 0.4s ease",
-                    }}
-                  >
-                    {node.title}
-                  </p>
+                {reduceMotion &&
+                  layout.nodes.map((node, index) => (
+                    <circle
+                      key={`static-orb-${index}`}
+                      cx={node.x}
+                      cy={node.y}
+                      r={coreR}
+                      fill="#7fb8ff"
+                      opacity={index === layout.nodes.length - 1 ? 1 : 0.35}
+                    />
+                  ))}
+              </g>
 
-                  {/* Pulse dot */}
-                  <motion.span
-                    className="absolute top-2.5 right-2.5 size-2 rounded-full"
-                    animate={{
-                      backgroundColor: isActive ? "#4f8cff" : "#27272a",
-                      opacity: isActive ? [1, 0.4, 1] : 1,
-                    }}
+              {layout.nodes.map((node, index) => (
+                <NodeCard
+                  key={`${layout.id}-${node.title}`}
+                  node={node}
+                  index={index}
+                  isActive={activeNodes.has(index)}
+                  layout={layout}
+                  interactive={layout.id === "desktop"}
+                />
+              ))}
+
+              {layout.id === "desktop" && (
+                <foreignObject x={560} y={8} width={48} height={48}>
+                  <motion.div
+                    {...({ xmlns: "http://www.w3.org/1999/xhtml" } as object)}
+                    animate={
+                      reduceMotion
+                        ? undefined
+                        : { y: [-4, 4, -4], rotate: [0, 4, 0, -4, 0] }
+                    }
                     transition={{
-                      backgroundColor: { duration: 0.4 },
-                      opacity: { duration: 1.8, repeat: Infinity },
+                      duration: 5,
+                      repeat: Infinity,
+                      ease: "easeInOut",
                     }}
-                  />
-                </motion.div>
-              );
-            })}
-
-            {/* Floating Target decoration */}
-            <motion.div
-              animate={{ y: [-8, 8, -8], rotate: [0, 4, 0, -4, 0] }}
-              transition={{ duration: 5, repeat: Infinity, ease: "easeInOut" }}
-              className="absolute"
-              style={{ right: "2%", top: "4%" }}
-            >
-              <Target size={40} color="#27272a" strokeWidth={1.5} />
-            </motion.div>
+                    className="flex h-full w-full items-center justify-center"
+                  >
+                    <Target size={40} color="#27272a" strokeWidth={1.5} />
+                  </motion.div>
+                </foreignObject>
+              )}
+            </svg>
           </div>
         </div>
 
-        <div className="h-8 md:h-10" />
+        <div className="h-6 sm:h-8 md:h-10" />
       </div>
     </div>
   );

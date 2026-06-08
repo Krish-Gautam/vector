@@ -6,9 +6,8 @@ import Link from "next/link";
 import Image from "next/image";
 import {
   ChevronDown,
-  CircleHelp,
-  Crown,
   Home,
+  LayoutDashboard,
   LogOut,
   Settings,
   User,
@@ -20,7 +19,7 @@ import { useAuth } from "../../providers/AuthProvider";
 const navItems = [
   { label: "Home", icon: Home, href: "/" },
   { label: "Roadmap", icon: Wrench, href: "/roadmap" },
-  { label: "Dashboard", icon: Crown, href: "/dashboard" },
+  { label: "Dashboard", icon: LayoutDashboard, href: "/dashboard" },
 ];
 
 const dropdownItems = [

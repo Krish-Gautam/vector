@@ -64,7 +64,7 @@ export default function ProgressTrackingCard() {
   }, []);
 
   return (
-    <div className="relative overflow-hidden border-b md:border-b-0 md:border-r border-zinc-500 min-h-[700px] p-6 sm:p-10 md:p-14 bg-black">
+    <div className="relative overflow-hidden border-t md:border-r md:border-zinc-400  min-h-[700px] p-6 sm:p-10 md:p-14 bg-black">
       <h3 className="text-white text-4xl font-bold uppercase mb-5 tracking-tight">
         TRACK YOUR PROGRESS
       </h3>

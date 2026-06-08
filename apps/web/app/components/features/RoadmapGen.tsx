@@ -178,17 +178,17 @@ export default function RoadmapGen() {
 const roadmapTasks = data[phase as keyof typeof data];
 
   return (
-    <div className="border-b md:border-r border-zinc-500 p-6 sm:p-10 md:p-14 min-h-[700px] bg-black">
-      <h3 className="text-white text-4xl font-bold uppercase mb-5 tracking-tight">
+    <div className=" p-6 sm:p-10 md:p-14 md:border-r  md:border-zinc-400 min-h-[700px] bg-black">
+      <h3 className="text-white md:text-4xl md:font-bold uppercase mb-5 tracking-tight">
         AI-POWERED ROADMAP GENERATION
       </h3>
 
-      <p className="text-zinc-400 text-lg leading-relaxed max-w-[650px]">
+      <p className="text-zinc-400 text-sm md:text-lg leading-relaxed max-w-[650px]">
         Create a personalized roadmap tailored to your goal, current skill
         level, available time, and daily study capacity.
       </p>
 
-      <p className="text-zinc-400 text-lg leading-relaxed max-w-[650px] mt-8">
+      <p className="text-zinc-400 text-sm md:text-lg leading-relaxed max-w-[650px] mt-8">
         Whether you're learning coding, preparing for interviews, mastering a
         skill, or building a business, get a step-by-step plan designed
         specifically for you.
@@ -198,14 +198,14 @@ const roadmapTasks = data[phase as keyof typeof data];
         initial={{ opacity: 0, y: 40 }}
         whileInView={{ opacity: 1, y: 0 }}
         viewport={{ once: true }}
-        className="mt-16 rounded-[28px] border border-zinc-800 overflow-hidden bg-[#050505]"
+        className="mt-8 rounded-[28px] border border-zinc-800 overflow-hidden bg-[#050505]"
       >
         <div className="p-3 flex gap-1 flex-wrap border-b border-zinc-800">
           {phases.map((item, i) => (
             <button
               key={item}
               onClick={() => setActive(i)}
-              className="relative px-2 py-2 rounded-full text-sm font-light"
+              className="relative px-2 py-2 rounded-full text-xs md:text-sm font-light"
             >
               {active === i && (
                 <motion.div
@@ -248,7 +248,7 @@ const roadmapTasks = data[phase as keyof typeof data];
             transition={{
               duration: 0.35,
             }}
-            className="p-6 space-y-4 min-h-[320px]"
+            className="md:p-6 p-2 space-y-4 min-h-[320px]"
           >
             {roadmapTasks.map((task, index) => (
               <motion.div
@@ -266,13 +266,13 @@ const roadmapTasks = data[phase as keyof typeof data];
                 }}
                 className="flex flex-wrap items-center gap-3 border-b border-zinc-900 pb-4"
               >
-                <div className="size-7 rounded-full bg-zinc-900 flex items-center justify-center text-xs text-zinc-500">
+                <div className="size-5 rounded-full bg-zinc-900 flex items-center justify-center text-xs text-zinc-500">
                   {index + 1}
                 </div>
 
-                <div className="text-white flex-1">{task.title}</div>
+                <div className="text-white flex-1 text-xs">{task.title}</div>
 
-                <div className="flex items-center gap-1 text-zinc-400 text-sm">
+                <div className="flex items-center gap-1 text-zinc-400 text-xs md:text-sm">
                   <Clock3 size={14} />
                   {task.time}
                 </div>

@@ -26,7 +26,7 @@ const team = [
   },
   {
     name: "Parul Yadav",
-    role: "Founder",
+    role: "Product Manager",
     image: "/parul.jpeg",
     instagram: "https://www.instagram.com/_ydv_parul_?igsh=YnhpdXB4N3l1N3Zx",
     linkedin:
@@ -204,7 +204,7 @@ export default function AboutSection() {
               </h3>
 
               {/* Role */}
-              <span className="inline-block rounded-full border border-violet-500/20 bg-violet-500/10 px-2.5 py-0.5 text-[10px] uppercase tracking-[0.1em] text-violet-400 mb-5">
+              <span className="inline-block rounded-full border border-violet-500/20 bg-violet-500/10 px-2.5 py-1 text-[10px] uppercase tracking-[0.1em] text-violet-400 mb-5">
                 {member.role}
               </span>
 

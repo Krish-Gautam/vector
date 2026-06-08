@@ -70,7 +70,7 @@ export default function CommunityHub() {
   const org = organizations[active];
 
   return (
-    <div className="relative overflow-hidden min-h-[700px] p-6 sm:p-10 md:p-14 bg-black">
+    <div className="relative overflow-hidden border-t  border-zinc-400  min-h-[700px] p-6 sm:p-10 md:p-14 bg-black">
       <h3 className="text-white text-4xl font-bold uppercase mb-5">
         LEARN WITH YOUR COMMUNITY
       </h3>
