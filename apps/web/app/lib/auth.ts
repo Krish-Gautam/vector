@@ -11,11 +11,13 @@ export async function signUp(
     options: {
       data: {
         username,
+        full_name: username,
       },
     },
   });
 
   if (error) {
+    console.error("SIGNUP ERROR:", error);
     throw error;
   }
 

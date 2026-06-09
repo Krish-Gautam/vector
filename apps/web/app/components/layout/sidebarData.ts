@@ -37,7 +37,7 @@ export const sidebarGroups: SidebarGroup[] = [
   {
     section: "ACCOUNTABILITY",
     items: [
-      { icon: Users, label: "Execution Circle", href: "/circle" },
+{ icon: Users, label: "Execution Circle", href: "/execution-circle" },
       { icon: Trophy, label: "Leaderboard", href: "/leaderboard" },
       { icon: ShieldCheck, label: "Proof Logs", href: "/proof-logs" },
     ],
