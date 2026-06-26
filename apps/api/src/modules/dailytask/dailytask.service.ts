@@ -1,431 +1,90 @@
-// // services/dailyTask.service.ts
-
-// import { supabase } from "../../data/supabase.client.js";
-
-// export class DailyTaskService {
-//   // =========================================================
-//   // GENERATE WEEKLY TASKS
-//   // =========================================================
-
-//   async generateWeeklyTasks(userId: string) {
-//     const today = new Date();
-//     today.setHours(0, 0, 0, 0);
-
-//     // Generate tasks for the next 7 days starting from today
-//     const tasksGenerated = [];
-
-//     for (let i = 0; i < 7; i++) {
-//       const targetDate = new Date(today);
-//       targetDate.setDate(today.getDate() + i);
-//       const dateStr = targetDate.toISOString().split("T")[0];
-
-//       const task = await this.generateDailyTasks(userId, dateStr);
-//       if (task) {
-//         tasksGenerated.push(task);
-//       }
-//     }
-
-//     return tasksGenerated;
-//   }
-
-//   // =========================================================
-//   // GENERATE DAILY TASKS
-//   // =========================================================
-
-//   async generateDailyTasks(userId: string, targetDateStr?: string) {
-//     const today = new Date();
-//     const todayStr = targetDateStr || today.toISOString().split("T")[0];
-
-//     // =========================================================
-//     // CHECK IF TASKS ALREADY EXIST FOR THIS DATE
-//     // =========================================================
-
-//     const { data: existingTasks } = await supabase
-//       .from("daily_tasks")
-//       .select("id")
-//       .eq("user_id", userId)
-//       .eq("scheduled_for", todayStr);
-
-//     if (existingTasks && existingTasks.length > 0) {
-//       return existingTasks;
-//     }
-
-//     // =========================================================
-//     // GET USER PROFILE
-//     // =========================================================
-
-//     const { data: profile } = await supabase
-//       .from("profiles")
-//       .select("daily_study_minutes")
-//       .eq("id", userId)
-//       .single();
-
-//     const dailyMinutes = profile?.daily_study_minutes || 120;
-
-//     // =========================================================
-//     // GET USER GOAL
-//     // =========================================================
-
-//     const { data: goal } = await supabase
-//       .from("user_goals")
-//       .select("id")
-//       .eq("user_id", userId)
-//       .order("created_at", {
-//         ascending: false,
-//       })
-//       .limit(1)
-//       .single();
-
-//     if (!goal) {
-//       throw new Error("Goal not found");
-//     }
-
-//     // =========================================================
-//     // GET ROADMAP
-//     // =========================================================
-
-//     const { data: roadmap } = await supabase
-//       .from("roadmaps")
-//       .select("id")
-//       .eq("goal_id", goal.id)
-//       .single();
-
-//     if (!roadmap) {
-//       throw new Error("Roadmap not found");
-//     }
-
-//     // =========================================================
-//     // GET CURRENT ACTIVE TASK
-//     // =========================================================
-
-//     const { data: currentTask } = await supabase
-//       .from("tasks")
-//       .select("*")
-//       .eq("roadmap_id", roadmap.id)
-//       .eq("completed", false)
-//       .order("task_order", {
-//         ascending: true,
-//       })
-//       .limit(1)
-//       .single();
-
-//     if (!currentTask) {
-//       return null;
-//     }
-
-//     // =========================================================
-//     // CALCULATE REMAINING MINUTES
-//     // =========================================================
-
-//     const remainingMinutes =
-//       currentTask.estimated_minutes - (currentTask.progress_minutes || 0);
-
-//     if (remainingMinutes <= 0) {
-//       return null;
-//     }
-
-//     // =========================================================
-//     // GENERATE SESSION
-//     // =========================================================
-
-//     const sessionMinutes = Math.min(dailyMinutes, remainingMinutes);
-
-//     const { data: dailyTask, error } = await supabase
-//       .from("daily_tasks")
-//       .insert({
-//         user_id: userId,
-
-//         roadmap_task_id: currentTask.id,
-
-//         title: currentTask.title,
-
-//         scheduled_for: todayStr,
-
-//         session_minutes: sessionMinutes,
-//       })
-//       .select()
-//       .single();
-
-//     if (error) {
-//       throw error;
-//     }
-
-//     return dailyTask;
-//   }
-
-//   // =========================================================
-//   // ENSURE WEEKLY PLAN EXISTS
-//   // =========================================================
-
-//   async ensureWeeklyPlan(userId: string) {
-//     const today = new Date();
-//     today.setHours(0, 0, 0, 0);
-
-//     // Check how many future tasks exist (including today)
-//     const { data: futureTasks } = await supabase
-//       .from("daily_tasks")
-//       .select("scheduled_for")
-//       .eq("user_id", userId)
-//       .gte("scheduled_for", today.toISOString().split("T")[0])
-//       .order("scheduled_for", { ascending: true });
-
-//     const existingDates = new Set(
-//       futureTasks?.map((task) => task.scheduled_for) || []
-//     );
-
-//     // Generate tasks for missing days up to 7 days ahead
-//     const tasksGenerated = [];
-//     for (let i = 0; i < 7; i++) {
-//       const targetDate = new Date(today);
-//       targetDate.setDate(today.getDate() + i);
-//       const dateStr = targetDate.toISOString().split("T")[0];
-
-//       if (!existingDates.has(dateStr)) {
-//         const task = await this.generateDailyTasks(userId, dateStr);
-//         if (task) {
-//           tasksGenerated.push(task);
-//         }
-//       }
-//     }
-
-//     return tasksGenerated;
-//   }
-
-//   // =========================================================
-//   // GENERATE NEXT WEEK (GUARDED)
-//   // =========================================================
-
-//   async generateNextWeeklyPlan(userId: string) {
-//     const today = new Date();
-//     today.setHours(0, 0, 0, 0);
-
-//     const weekEnd = new Date(today);
-//     weekEnd.setDate(today.getDate() + 6);
-
-//     const { data: remainingTasks } = await supabase
-//       .from("daily_tasks")
-//       .select("id")
-//       .eq("user_id", userId)
-//       .gte("scheduled_for", today.toISOString().split("T")[0])
-//       .lte("scheduled_for", weekEnd.toISOString().split("T")[0])
-//       .eq("completed", false);
-
-//     if ((remainingTasks?.length || 0) > 4) {
-//       throw new Error("Complete more tasks before generating next week.");
-//     }
-
-//     const nextWeekStart = new Date(today);
-//     nextWeekStart.setDate(today.getDate() + 7);
-//     const nextWeekEnd = new Date(today);
-//     nextWeekEnd.setDate(today.getDate() + 13);
-
-//     const nextWeekStartStr = nextWeekStart.toISOString().split("T")[0];
-//     const nextWeekEndStr = nextWeekEnd.toISOString().split("T")[0];
-
-//     const { data: existingNextWeek } = await supabase
-//       .from("daily_tasks")
-//       .select("scheduled_for")
-//       .eq("user_id", userId)
-//       .gte("scheduled_for", nextWeekStartStr)
-//       .lte("scheduled_for", nextWeekEndStr)
-//       .order("scheduled_for", { ascending: true });
-
-//     if ((existingNextWeek?.length || 0) > 0) {
-//       return {
-//         generated: [],
-//         skipped: true,
-//         reason: "First complete pending tasks.",
-//       };
-//     }
-
-//     const tasksGenerated = [];
-//     for (let i = 7; i < 14; i++) {
-//       const targetDate = new Date(today);
-//       targetDate.setDate(today.getDate() + i);
-//       const dateStr = targetDate.toISOString().split("T")[0];
-
-//       const task = await this.generateDailyTasks(userId, dateStr);
-//       if (task) {
-//         tasksGenerated.push(task);
-//       }
-//     }
-
-//     return {
-//       generated: tasksGenerated,
-//       skipped: false,
-//     };
-//   }
-
-//   // =========================================================
-//   // COMPLETE DAILY TASK
-//   // =========================================================
-
-//   async completeDailyTask(dailyTaskId: string, userId: string) {
-//     // =========================================================
-//     // GET DAILY TASK
-//     // =========================================================
-
-//     const { data: dailyTask } = await supabase
-//       .from("daily_tasks")
-//       .select("*")
-//       .eq("id", dailyTaskId)
-//       .eq("user_id", userId)
-//       .single();
-
-//     if (!dailyTask) {
-//       throw new Error("Daily task not found");
-//     }
-
-//     if (dailyTask.completed) {
-//       return dailyTask;
-//     }
-
-//     // =========================================================
-//     // MARK DAILY TASK COMPLETE
-//     // =========================================================
-//     const { data, error } = await supabase
-//       .from("daily_tasks")
-//       .update({
-//         completed: true,
-//         completed_at: new Date(),
-//       })
-//       .eq("id", dailyTaskId)
-//       .select();
-
-//     console.log(data);
-//     console.log(error);
-
-//     // =========================================================
-//     // UPDATE ROADMAP TASK PROGRESS
-//     // =========================================================
-
-//     const { data: roadmapTask } = await supabase
-//       .from("tasks")
-//       .select("*")
-//       .eq("id", dailyTask.roadmap_task_id)
-//       .single();
-
-//     const newProgress =
-//       (roadmapTask?.progress_minutes || 0) + dailyTask.session_minutes;
-
-//     const isCompleted = newProgress >= roadmapTask.estimated_minutes;
-
-//     const { data: updatedRoadmapTask, error: roadmapUpdateError } = await supabase
-//       .from("tasks")
-//       .update({
-//         progress_minutes: newProgress,
-
-//         completed: isCompleted,
-//         completed_at: isCompleted ? new Date() : null,
-//       })
-//       .eq("id", roadmapTask.id);
-
-
-//     // =========================================================
-//     // INSERT ACTIVITY LOG
-//     // =========================================================
-
-//     const now = new Date();
-//     const todayStr = now.toISOString().split("T")[0];
-//     const todayStart = `${todayStr}T00:00:00.000Z`;
-//     const todayEnd = `${todayStr}T23:59:59.999Z`;
-
-//     const { data: existingActivity, error: activityCheckError } = await supabase
-//       .from("activity_logs")
-//       .select("id")
-//       .eq("user_id", userId)
-//       .gte("created_at", todayStart)
-//       .lte("created_at", todayEnd)
-//       .maybeSingle();
-
-//     console.log("Checking for existing activity log:", {
-//       userId,
-//       todayStart,
-//       todayEnd,
-//       existingActivity,
-//       activityCheckError,
-//     });
-
-
-//     if (!existingActivity) {
-//       const { data: newActivity, error: insertError } = await supabase
-//         .from("activity_logs")
-//         .insert({
-//           user_id: userId,
-//           created_at: now.toISOString(),
-//         })
-//         .select()
-//         .single();
-
-//       console.log("Inserted new activity log:", {
-//         newActivity,
-//         insertError,
-//       });
-//     }
-
-//     // =========================================================
-//     // ENSURE WEEKLY PLAN IS MAINTAINED
-//     // =========================================================
-
-//     if (isCompleted) {
-//       // Generate new tasks to maintain 7-day plan
-//       await this.ensureWeeklyPlan(userId);
-//     }
-
-//     return {
-//       success: true,
-//     };
-//   }
-
-//   // =========================================================
-//   // GET WEEKLY TASKS
-//   // =========================================================
-
-//   async getWeeklyTasks(userId: string) {
-//     const today = new Date();
-//     today.setHours(0, 0, 0, 0);
-
-//     const weekEnd = new Date(today);
-//     weekEnd.setDate(today.getDate() + 6);
-
-//     const { data: tasks } = await supabase
-//       .from("daily_tasks")
-//       .select("*")
-//       .eq("user_id", userId)
-//       .gte("scheduled_for", today.toISOString().split("T")[0])
-//       .lte("scheduled_for", weekEnd.toISOString().split("T")[0])
-//       .order("scheduled_for", { ascending: true });
-
-//     return tasks || [];
-//   }
-// }
-
-// export const dailyTaskService = new DailyTaskService();
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 import { supabase } from "../../data/supabase.client.js";
 
 export class DailyTaskService {
+  // =========================================================
+  // PRIVATE HELPER: Get roadmap id for user
+  // =========================================================
+
+  private async getRoadmapId(userId: string): Promise<string> {
+    const { data: goal } = await supabase
+      .from("user_goals")
+      .select("id")
+      .eq("user_id", userId)
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .single();
+
+    if (!goal) throw new Error("No goal found");
+
+    const { data: roadmap } = await supabase
+      .from("roadmaps")
+      .select("id")
+      .eq("goal_id", goal.id)
+      .single();
+
+    if (!roadmap) throw new Error("Roadmap not found");
+
+    return roadmap.id;
+  }
+
+  // =========================================================
+  // PRIVATE HELPER: Get all incomplete tasks ordered correctly
+  // CHANGE: was .eq("completed", false) — column was dropped.
+  //         Now filters by status != 'COMPLETED' and sorts by
+  //         phase_order first, then task_order, so phases are
+  //         respected in the planner.
+  // =========================================================
+
+  private async getIncompleteTasks(roadmapId: string) {
+    const { data: tasks, error } = await supabase
+      .from("tasks")
+      .select(
+        `
+      id,
+      title,
+      estimated_minutes,
+      progress_minutes,
+      status,
+      task_order,
+      phase_id,
+      roadmap_phases!inner ( phase_order )
+    `,
+      )
+      .eq("roadmap_id", roadmapId)
+      .neq("status", "COMPLETED");
+
+    if (error) throw error;
+
+    const result = tasks ?? [];
+
+    // Sort client-side: phase_order first, then task_order.
+    // Embedded-table ordering via .order(referencedTable/foreignTable)
+    // has been unreliable across supabase-js/PostgREST versions,
+    // so we sort explicitly here instead of trusting the DB-side order.
+    result.sort((a: any, b: any) => {
+      const phaseA = a.roadmap_phases?.phase_order ?? 0;
+      const phaseB = b.roadmap_phases?.phase_order ?? 0;
+      if (phaseA !== phaseB) return phaseA - phaseB;
+      return (a.task_order ?? 0) - (b.task_order ?? 0);
+    });
+
+    return result;
+  }
+
+  // =========================================================
+  // PRIVATE HELPER: Get daily study minutes for user
+  // =========================================================
+
+  private async getDailyMinutes(userId: string): Promise<number> {
+    const { data: profile } = await supabase
+      .from("profiles")
+      .select("daily_study_minutes")
+      .eq("id", userId)
+      .single();
+
+    return profile?.daily_study_minutes || 120;
+  }
+
   // =========================================================
   // GENERATE WEEKLY TASKS
   // =========================================================
@@ -434,28 +93,128 @@ export class DailyTaskService {
     const today = new Date();
     today.setHours(0, 0, 0, 0);
 
-    const tasksGenerated = [];
-
-    for (let i = 0; i < 7; i++) {
-      const targetDate = new Date(today);
-      targetDate.setDate(today.getDate() + i);
-      const dateStr = targetDate.toISOString().split("T")[0];
-
-      const task = await this.generateDailyTasks(userId, dateStr);
-      if (task) {
-        tasksGenerated.push(task);
-      }
-    }
-
-    return tasksGenerated;
+    return this._buildWeeklyPlan(userId, today, 0, 7);
   }
 
   // =========================================================
-  // GENERATE DAILY TASKS
+  // PRIVATE: Core weekly planner
+  // dayOffset    = which day to start from (0 = today, 7 = next week)
+  // numberOfDays = how many days to plan
+  // =========================================================
+
+  private async _buildWeeklyPlan(
+    userId: string,
+    baseDate: Date,
+    dayOffset: number,
+    numberOfDays: number,
+  ) {
+    // CHANGE: run profile + roadmap lookups in parallel
+    const [dailyMinutes, roadmapId] = await Promise.all([
+      this.getDailyMinutes(userId),
+      this.getRoadmapId(userId),
+    ]);
+
+    const tasks = await this.getIncompleteTasks(roadmapId);
+
+    if (tasks.length === 0) return [];
+
+    // Build list of dates to fill
+    const datesToFill: string[] = [];
+    for (let i = dayOffset; i < dayOffset + numberOfDays; i++) {
+      const targetDate = new Date(baseDate);
+      targetDate.setDate(baseDate.getDate() + i);
+      datesToFill.push(targetDate.toISOString().split("T")[0]);
+    }
+
+    // Check which dates already have daily_tasks in one query
+    const { data: existingTasks } = await supabase
+      .from("daily_tasks")
+      .select("scheduled_for")
+      .eq("user_id", userId)
+      .in("scheduled_for", datesToFill);
+
+    const existingDates = new Set(
+      existingTasks?.map((t) => t.scheduled_for) || [],
+    );
+
+    const emptyDates = datesToFill.filter((d) => !existingDates.has(d));
+
+    if (emptyDates.length === 0) return [];
+
+    // =========================================================
+    // Stateful planner: walk tasks in order, filling days.
+    // A task may span multiple days; a day may contain multiple
+    // tasks if one finishes before the day's minutes are used up.
+    // =========================================================
+
+    let taskIndex = 0;
+    let minutesLeftInCurrentTask =
+      tasks[0].estimated_minutes - (tasks[0].progress_minutes || 0);
+
+    const inserted: any[] = [];
+
+    for (const dateStr of emptyDates) {
+      let minutesLeftForDay = dailyMinutes;
+
+      while (minutesLeftForDay > 0 && taskIndex < tasks.length) {
+        // Skip tasks that somehow have no remaining minutes
+        if (minutesLeftInCurrentTask <= 0) {
+          taskIndex++;
+          if (taskIndex >= tasks.length) break;
+          minutesLeftInCurrentTask =
+            tasks[taskIndex].estimated_minutes -
+            (tasks[taskIndex].progress_minutes || 0);
+          continue;
+        }
+
+        const sessionMinutes = Math.min(
+          minutesLeftForDay,
+          minutesLeftInCurrentTask,
+        );
+
+        const { data: dailyTask, error } = await supabase
+          .from("daily_tasks")
+          .insert({
+            user_id: userId,
+            roadmap_task_id: tasks[taskIndex].id,
+            title: tasks[taskIndex].title,
+            scheduled_for: dateStr,
+            session_minutes: sessionMinutes,
+          })
+          .select()
+          .single();
+
+        if (error) throw error;
+        if (dailyTask) inserted.push(dailyTask);
+
+        minutesLeftForDay -= sessionMinutes;
+        minutesLeftInCurrentTask -= sessionMinutes;
+
+        if (minutesLeftInCurrentTask <= 0) {
+          taskIndex++;
+          if (taskIndex < tasks.length) {
+            minutesLeftInCurrentTask =
+              tasks[taskIndex].estimated_minutes -
+              (tasks[taskIndex].progress_minutes || 0);
+          }
+        }
+      }
+
+      if (taskIndex >= tasks.length) break;
+    }
+
+    return inserted;
+  }
+
+  // =========================================================
+  // GENERATE DAILY TASKS (single day)
+  // Delegates to _buildWeeklyPlan for one day so logic is consistent.
   // =========================================================
 
   async generateDailyTasks(userId: string, targetDateStr?: string) {
     const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
     const todayStr = targetDateStr || today.toISOString().split("T")[0];
 
     const { data: existingTasks } = await supabase
@@ -468,75 +227,14 @@ export class DailyTaskService {
       return existingTasks;
     }
 
-    const { data: profile } = await supabase
-      .from("profiles")
-      .select("daily_study_minutes")
-      .eq("id", userId)
-      .single();
+    const targetDate = new Date(todayStr);
+    targetDate.setHours(0, 0, 0, 0);
+    const dayOffset = Math.round(
+      (targetDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24),
+    );
 
-    const dailyMinutes = profile?.daily_study_minutes || 120;
-
-    const { data: goal } = await supabase
-      .from("user_goals")
-      .select("id")
-      .eq("user_id", userId)
-      .order("created_at", { ascending: false })
-      .limit(1)
-      .single();
-
-    if (!goal) {
-      throw new Error("Goal not found");
-    }
-
-    const { data: roadmap } = await supabase
-      .from("roadmaps")
-      .select("id")
-      .eq("goal_id", goal.id)
-      .single();
-
-    if (!roadmap) {
-      throw new Error("Roadmap not found");
-    }
-
-    const { data: currentTask } = await supabase
-      .from("tasks")
-      .select("*")
-      .eq("roadmap_id", roadmap.id)
-      .eq("completed", false)
-      .order("task_order", { ascending: true })
-      .limit(1)
-      .single();
-
-    if (!currentTask) {
-      return null;
-    }
-
-    const remainingMinutes =
-      currentTask.estimated_minutes - (currentTask.progress_minutes || 0);
-
-    if (remainingMinutes <= 0) {
-      return null;
-    }
-
-    const sessionMinutes = Math.min(dailyMinutes, remainingMinutes);
-
-    const { data: dailyTask, error } = await supabase
-      .from("daily_tasks")
-      .insert({
-        user_id: userId,
-        roadmap_task_id: currentTask.id,
-        title: currentTask.title,
-        scheduled_for: todayStr,
-        session_minutes: sessionMinutes,
-      })
-      .select()
-      .single();
-
-    if (error) {
-      throw error;
-    }
-
-    return dailyTask;
+    const results = await this._buildWeeklyPlan(userId, today, dayOffset, 1);
+    return results.length > 0 ? results : null;
   }
 
   // =========================================================
@@ -547,32 +245,7 @@ export class DailyTaskService {
     const today = new Date();
     today.setHours(0, 0, 0, 0);
 
-    const { data: futureTasks } = await supabase
-      .from("daily_tasks")
-      .select("scheduled_for")
-      .eq("user_id", userId)
-      .gte("scheduled_for", today.toISOString().split("T")[0])
-      .order("scheduled_for", { ascending: true });
-
-    const existingDates = new Set(
-      futureTasks?.map((task) => task.scheduled_for) || []
-    );
-
-    const tasksGenerated = [];
-    for (let i = 0; i < 7; i++) {
-      const targetDate = new Date(today);
-      targetDate.setDate(today.getDate() + i);
-      const dateStr = targetDate.toISOString().split("T")[0];
-
-      if (!existingDates.has(dateStr)) {
-        const task = await this.generateDailyTasks(userId, dateStr);
-        if (task) {
-          tasksGenerated.push(task);
-        }
-      }
-    }
-
-    return tasksGenerated;
+    return this._buildWeeklyPlan(userId, today, 0, 7);
   }
 
   // =========================================================
@@ -586,16 +259,21 @@ export class DailyTaskService {
     const weekEnd = new Date(today);
     weekEnd.setDate(today.getDate() + 6);
 
-    const { data: remainingTasks } = await supabase
+    const todayStr = today.toISOString().split("T")[0];
+    const weekEndStr = weekEnd.toISOString().split("T")[0];
+
+    const { data: completedThisWeek } = await supabase
       .from("daily_tasks")
       .select("id")
       .eq("user_id", userId)
-      .gte("scheduled_for", today.toISOString().split("T")[0])
-      .lte("scheduled_for", weekEnd.toISOString().split("T")[0])
-      .eq("completed", false);
+      .eq("completed", true)
+      .gte("scheduled_for", todayStr)
+      .lte("scheduled_for", weekEndStr);
 
-    if ((remainingTasks?.length || 0) > 4) {
-      throw new Error("Complete more tasks before generating next week.");
+    if ((completedThisWeek?.length || 0) < 3) {
+      throw new Error(
+        "Complete at least 3 tasks this week before generating next week.",
+      );
     }
 
     const nextWeekStart = new Date(today);
@@ -611,33 +289,19 @@ export class DailyTaskService {
       .select("scheduled_for")
       .eq("user_id", userId)
       .gte("scheduled_for", nextWeekStartStr)
-      .lte("scheduled_for", nextWeekEndStr)
-      .order("scheduled_for", { ascending: true });
+      .lte("scheduled_for", nextWeekEndStr);
 
     if ((existingNextWeek?.length || 0) > 0) {
       return {
         generated: [],
         skipped: true,
-        reason: "First complete pending tasks.",
+        reason: "Next week already has tasks scheduled.",
       };
     }
 
-    const tasksGenerated = [];
-    for (let i = 7; i < 14; i++) {
-      const targetDate = new Date(today);
-      targetDate.setDate(today.getDate() + i);
-      const dateStr = targetDate.toISOString().split("T")[0];
+    const generated = await this._buildWeeklyPlan(userId, today, 7, 7);
 
-      const task = await this.generateDailyTasks(userId, dateStr);
-      if (task) {
-        tasksGenerated.push(task);
-      }
-    }
-
-    return {
-      generated: tasksGenerated,
-      skipped: false,
-    };
+    return { generated, skipped: false };
   }
 
   // =========================================================
@@ -652,127 +316,113 @@ export class DailyTaskService {
       .eq("user_id", userId)
       .single();
 
-    if (!dailyTask) {
-      throw new Error("Daily task not found");
-    }
-
-    if (dailyTask.completed) {
-      return dailyTask;
-    }
+    if (!dailyTask) throw new Error("Daily task not found");
+    if (dailyTask.completed) return { success: true };
 
     // =========================================================
     // MARK DAILY TASK COMPLETE
     // =========================================================
-    const { data, error } = await supabase
+
+    const { error: updateError } = await supabase
       .from("daily_tasks")
       .update({
         completed: true,
-        completed_at: new Date(),
+        completed_at: new Date().toISOString(),
       })
-      .eq("id", dailyTaskId)
-      .select();
+      .eq("id", dailyTaskId);
 
-    console.log(data);
-    console.log(error);
+    if (updateError) throw updateError;
 
     // =========================================================
     // UPDATE ROADMAP TASK PROGRESS
+    // CHANGE: removed completed, completed_at, and status from
+    //         the update payload — the sync_task_completion trigger
+    //         now handles all three automatically when
+    //         progress_minutes is updated. Only send progress_minutes.
     // =========================================================
 
     const { data: roadmapTask } = await supabase
       .from("tasks")
-      .select("*")
+      .select("id, progress_minutes, estimated_minutes")
       .eq("id", dailyTask.roadmap_task_id)
       .single();
 
+    if (!roadmapTask) throw new Error("Roadmap task not found");
+
     const newProgress =
-      (roadmapTask?.progress_minutes || 0) + dailyTask.session_minutes;
+      (roadmapTask.progress_minutes || 0) + dailyTask.session_minutes;
 
-    const isCompleted = newProgress >= roadmapTask.estimated_minutes;
-
-    await supabase
+    const { error: taskUpdateError } = await supabase
       .from("tasks")
-      .update({
-        progress_minutes: newProgress,
-        completed: isCompleted,
-        completed_at: isCompleted ? new Date() : null,
-      })
+      .update({ progress_minutes: newProgress })
       .eq("id", roadmapTask.id);
 
-    // =========================================================
-    // FEATURE 5: ACCOUNTABILITY ENGINE
-    // Wire score update to task completion source of truth
-    // =========================================================
-    const { data: membership } = await supabase
-      .from("circle_members")
-      .select("id, accountability_score, weekly_completion")
-      .eq("user_id", userId)
-      .maybeSingle();
-
-    if (membership) {
-      await supabase
-        .from("circle_members")
-        .update({
-          accountability_score: (membership.accountability_score || 0) + 2,
-          weekly_completion: (membership.weekly_completion || 0) + 1,
-          last_active_at: new Date().toISOString(),
-        })
-        .eq("id", membership.id);
-    }
+    if (taskUpdateError) throw taskUpdateError;
 
     // =========================================================
-    // INSERT ACTIVITY LOG
+    // ACCOUNTABILITY ENGINE + ACTIVITY LOG in parallel
+    // CHANGE: these two are independent — run together
     // =========================================================
 
-    const now = new Date();
-    const todayStr = now.toISOString().split("T")[0];
-    const todayStart = `${todayStr}T00:00:00.000Z`;
-    const todayEnd = `${todayStr}T23:59:59.999Z`;
-
-    const { data: existingActivity, error: activityCheckError } = await supabase
-      .from("activity_logs")
-      .select("id")
-      .eq("user_id", userId)
-      .gte("created_at", todayStart)
-      .lte("created_at", todayEnd)
-      .maybeSingle();
-
-    console.log("Checking for existing activity log:", {
-      userId,
-      todayStart,
-      todayEnd,
-      existingActivity,
-      activityCheckError,
-    });
-
-    if (!existingActivity) {
-      const { data: newActivity, error: insertError } = await supabase
-        .from("activity_logs")
-        .insert({
-          user_id: userId,
-          created_at: now.toISOString(),
-          metadata_json: { type: "task_completed", daily_task_id: dailyTaskId },
-        })
-        .select()
-        .single();
-
-      console.log("Inserted new activity log:", {
-        newActivity,
-        insertError,
-      });
-    }
+    await Promise.all([
+      this._updateCircleScore(userId),
+      this._upsertActivityLog(userId, dailyTaskId),
+    ]);
 
     // =========================================================
     // ENSURE WEEKLY PLAN IS MAINTAINED
     // =========================================================
 
-    if (isCompleted) {
-      await this.ensureWeeklyPlan(userId);
-    }
+    await this.ensureWeeklyPlan(userId);
 
-    return {
-      success: true,
-    };
+    return { success: true };
+  }
+
+  // =========================================================
+  // PRIVATE HELPER: Update circle member score
+  // Extracted from completeDailyTask to keep it readable
+  // =========================================================
+
+  private async _updateCircleScore(userId: string) {
+    const { data: membership } = await supabase
+      .from("circle_members")
+      .select("id, accountability_score, total_points, weekly_completion")
+      .eq("user_id", userId)
+      .maybeSingle();
+
+    if (!membership) return;
+
+    await supabase
+      .from("circle_members")
+      .update({
+        accountability_score: (membership.accountability_score || 0) + 2,
+        total_points: (membership.total_points || 0) + 2,
+        weekly_completion: (membership.weekly_completion || 0) + 1,
+        last_active_at: new Date().toISOString(),
+      })
+      .eq("id", membership.id);
+  }
+
+  // =========================================================
+  // PRIVATE HELPER: Upsert activity log (one per day max)
+  // CHANGE: was a check-then-insert with a date range scan.
+  //         Now uses INSERT ... ON CONFLICT DO NOTHING against
+  //         the unique index (user_id, activity_date) added in
+  //         migrations — one round trip instead of two, and the
+  //         DB enforces uniqueness so no race condition.
+  // =========================================================
+
+  private async _upsertActivityLog(userId: string, dailyTaskId: string) {
+    const now = new Date();
+
+    await supabase.from("activity_logs").insert({
+      user_id: userId,
+      created_at: now.toISOString(),
+      metadata_json: { type: "task_completed", daily_task_id: dailyTaskId },
+    });
+    // The unique index on (user_id, activity_date) silently ignores
+    // duplicate inserts for the same day — no explicit conflict
+    // handling needed unless you want to inspect the error.
   }
 
   // =========================================================
@@ -795,6 +445,21 @@ export class DailyTaskService {
       .order("scheduled_for", { ascending: true });
 
     return tasks || [];
+  }
+
+  // =========================================================
+  // GET STREAK
+  // CHANGE: new method — delegates to Postgres function so streak
+  //         is timezone-safe and computed in one DB call
+  // =========================================================
+
+  async getStreak(userId: string): Promise<number> {
+    const { data, error } = await supabase.rpc("get_user_streak", {
+      p_user_id: userId,
+    });
+
+    if (error) throw error;
+    return (data as number) ?? 0;
   }
 }
 

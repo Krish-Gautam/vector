@@ -1,230 +1,166 @@
 import { supabase } from "../../data/supabase.client.js";
 import { dailyTaskService } from "../dailytask/dailytask.service.js";
 
-type ActivityLog = {
-  created_at: string;
-};
-
 export class DashboardService {
   async getDashboard(userId: string) {
     // =========================================================
     // ENSURE WEEKLY PLAN EXISTS
     // =========================================================
     await dailyTaskService.ensureWeeklyPlan(userId);
-
-    const today = new Date();
-
-    const todayStr = today.toISOString().split("T")[0];
-
-    // =========================================================
-    // PROFILE
-    // =========================================================
-
-    const { data: profile } = await supabase
-      .from("profiles")
-      .select("*")
-      .eq("id", userId)
-      .single();
-
-    // =========================================================
-    // GET USER GOAL
-    // =========================================================
-
-    const { data: goal } = await supabase
-      .from("user_goals")
-      .select("id")
-      .eq("user_id", userId)
-      .order("created_at", {
-        ascending: false,
-      })
-      .limit(1)
-      .single();
-
-    if (!goal) {
-      throw new Error("Goal not found");
+    function todayInTz(tz: string) {
+      return new Intl.DateTimeFormat("en-CA", { timeZone: tz }).format(
+        new Date(),
+      );
+      // en-CA gives YYYY-MM-DD
     }
 
-    // =========================================================
-    // GET ROADMAP
-    // =========================================================
 
+    // =========================================================
+    // PROFILE + GOAL (goal needed for roadmap lookup)
+    // =========================================================
+    const [profileResult, goalResult] = await Promise.all([
+      supabase.from("profiles").select("*").eq("id", userId).single(),
+      supabase
+        .from("user_goals")
+        .select("id")
+        .eq("user_id", userId)
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .single(),
+    ]);
+
+    const profile = profileResult.data;
+    const goal = goalResult.data;
+
+    if (!goal) throw new Error("No goal found");
+
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const todayStr = todayInTz(profile.timezone ?? "Asia/Kolkata");
+
+    const weekEnd = new Date(today);
+    weekEnd.setDate(today.getDate() + 6);
+    const weekEndStr = weekEnd.toISOString().split("T")[0];
+
+    // Roadmap depends on goal.id so fetched after
     const { data: roadmap } = await supabase
       .from("roadmaps")
       .select("*")
       .eq("goal_id", goal.id)
       .single();
 
-    if (!roadmap) {
-      throw new Error("Roadmap not found");
-    }
+    if (!roadmap) throw new Error("No roadmap found");
 
     // =========================================================
-    // ROADMAP PHASES
+    // ALL REMAINING QUERIES IN PARALLEL
+    // Previously every query was sequential — this cuts dashboard
+    // load time significantly by firing them all at once.
     // =========================================================
+    const [
+      phasesResult,
+      allTasksResult,
+      todayTasksResult,
+      weeklyTasksResult,
+      metricsResult,
+      predictionsResult,
+      recoveryResult,
+      streakResult,
+    ] = await Promise.all([
+      // CHANGE: query phase_progress view instead of roadmap_phases
+      // so completion_percentage is always live, never stale
+      supabase
+        .from("phase_progress")
+        .select("*")
+        .eq("roadmap_id", roadmap.id)
+        .order("phase_order", { ascending: true }),
 
-    const { data: phases } = await supabase
-      .from("roadmap_phases")
-      .select("*")
-      .eq("roadmap_id", roadmap?.id);
+      // ALL ROADMAP TASKS
+      // select only columns we actually use — avoids over-fetching
+      supabase
+        .from("tasks")
+        .select(
+          "id, title, estimated_minutes, progress_minutes, status, task_order, phase_id",
+        )
+        .eq("roadmap_id", roadmap.id)
+        .order("task_order", { ascending: true }),
 
-    // =========================================================
-    // ALL ROADMAP TASKS
-    // =========================================================
+      // TODAY DAILY TASKS
+      supabase
+        .from("daily_tasks")
+        .select("*")
+        .eq("user_id", userId)
+        .eq("scheduled_for", todayStr)
+        .order("created_at", { ascending: true }),
 
-    const { data: allTasks } = await supabase
-      .from("tasks")
-      .select("*")
-      .eq("roadmap_id", roadmap?.id);
+      // WEEKLY TASKS
+      supabase
+        .from("daily_tasks")
+        .select("*")
+        .eq("user_id", userId)
+        .gte("scheduled_for", todayStr)
+        .lte("scheduled_for", weekEndStr)
+        .order("scheduled_for", { ascending: true }),
 
-    // =========================================================
-    // TODAY DAILY TASKS
-    // =========================================================
+      // EXECUTION METRICS
+      supabase
+        .from("execution_metrics")
+        .select("*")
+        .eq("user_id", userId)
+        .single(),
 
-    const { data: tasks } = await supabase
-      .from("daily_tasks")
-      .select("*")
-      .eq("user_id", userId)
-      .eq("scheduled_for", todayStr)
-      .order("created_at", {
-        ascending: true,
-      });
+      // AI PREDICTIONS
+      supabase
+        .from("ai_predictions")
+        .select("*")
+        .eq("user_id", userId)
+        .order("created_at", { ascending: false })
+        .limit(3),
 
-    // =========================================================
-    // WEEKLY TASKS (7 days including today)
-    // =========================================================
+      // RECOVERY RECOMMENDATIONS
+      supabase
+        .from("recovery_recommendations")
+        .select("*")
+        .eq("user_id", userId)
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .single(),
 
-    const weekEnd = new Date(today);
-    weekEnd.setDate(today.getDate() + 6);
-    const weekEndStr = weekEnd.toISOString().split("T")[0];
+      // CHANGE: streak now comes from the Postgres function instead of
+      // pulling all activity_logs to JS and doing date math here.
+      // get_user_streak uses the activity_date generated column +
+      // unique index — fast and timezone-safe.
+      supabase.rpc("get_user_streak", { p_user_id: userId }),
+    ]);
 
-    const { data: weeklyTasks } = await supabase
-      .from("daily_tasks")
-      .select("*")
-      .eq("user_id", userId)
-      .gte("scheduled_for", todayStr)
-      .lte("scheduled_for", weekEndStr)
-      .order("scheduled_for", {
-        ascending: true,
-      });
-
-    // =========================================================
-    // ACTIVITY LOGS
-    // =========================================================
-
-    const { data: activityLogs } = await supabase
-      .from("activity_logs")
-      .select("created_at")
-      .eq("user_id", userId)
-      .order("created_at", {
-        ascending: false,
-      });
-
-    // =========================================================
-    // EXECUTION METRICS
-    // =========================================================
-
-    const { data: metrics } = await supabase
-      .from("execution_metrics")
-      .select("*")
-      .eq("user_id", userId)
-      .single();
-
-    // =========================================================
-    // AI PREDICTIONS
-    // =========================================================
-
-    const { data: predictions } = await supabase
-      .from("ai_predictions")
-      .select("*")
-      .eq("user_id", userId)
-      .order("created_at", {
-        ascending: false,
-      })
-      .limit(3);
-
-    // =========================================================
-    // RECOVERY RECOMMENDATIONS
-    // =========================================================
-
-    const { data: recovery } = await supabase
-      .from("recovery_recommendations")
-      .select("*")
-      .eq("user_id", userId)
-      .order("created_at", {
-        ascending: false,
-      })
-      .limit(1)
-      .single();
+    const phases = phasesResult.data ?? [];
+    const allTasks = allTasksResult.data ?? [];
+    const todayTasks = todayTasksResult.data ?? [];
+    const weeklyTasks = weeklyTasksResult.data ?? [];
+    const metrics = metricsResult.data;
+    const predictions = predictionsResult.data ?? [];
+    const recovery = recoveryResult.data;
 
     // =========================================================
-    // STREAK LOGIC
+    // STREAK
+    // CHANGE: was a JS function that fetched all activity_logs,
+    // deduplicated with toLocaleDateString (timezone-unsafe), and
+    // looped manually. Now a single Postgres RPC call.
     // =========================================================
+    const currentStreak = (streakResult.data as number) ?? 0;
 
-    function calculateStreak(activityLogs: ActivityLog[]) {
-      if (!activityLogs.length) return 0;
+    // =========================================================
+    // ROADMAP PROGRESS (based on minutes, not task count)
+    // =========================================================
+    const totalRoadmapMinutes = allTasks.reduce(
+      (sum, task) => sum + (task.estimated_minutes || 0),
+      0,
+    );
 
-      const uniqueDays = [
-        ...new Set(
-          activityLogs.map((log) =>
-            new Date(log.created_at).toLocaleDateString("en-CA"),
-          ),
-        ),
-      ].sort(
-        (a: string, b: string) => new Date(b).getTime() - new Date(a).getTime(),
+    const completedRoadmapMinutes = allTasks.reduce((sum, task) => {
+      return (
+        sum + Math.min(task.progress_minutes || 0, task.estimated_minutes || 0)
       );
-
-      let streak = 0;
-
-      const today = new Date();
-
-      for (let i = 0; i < uniqueDays.length; i++) {
-        const expectedDate = new Date(today);
-
-        expectedDate.setHours(0, 0, 0, 0);
-
-        expectedDate.setDate(today.getDate() - i);
-
-        const expectedStr = expectedDate.toLocaleDateString("en-CA");
-
-        if (uniqueDays[i] === expectedStr) {
-          streak++;
-        } else {
-          break;
-        }
-      }
-
-      return streak;
-    }
-
-    const currentStreak = calculateStreak(activityLogs || []);
-
-    // =========================================================
-    // TASK ANALYTICS
-    // =========================================================
-
-    const totalTasks = tasks?.length || 0;
-
-    const completedTasks = tasks?.filter((task) => task.completed) || [];
-
-    const completionRate =
-      totalTasks > 0
-        ? Math.round((completedTasks.length / totalTasks) * 100)
-        : 0;
-
-    // =========================================================
-    // ROADMAP PROGRESS (Based on Tasks, not Phases)
-    // =========================================================
-
-    const totalRoadmapTasks = allTasks?.length || 0;
-
-    const totalRoadmapMinutes =
-      allTasks?.reduce((sum, task) => sum + (task.estimated_minutes || 0), 0) || 0;
-    const completedRoadmapMinutes =
-      allTasks?.reduce((sum, task) => {
-        const estimated = task.estimated_minutes || 0;
-        const progress = task.progress_minutes || 0;
-        return sum + Math.min(progress, estimated);
-      }, 0) || 0;
+    }, 0);
 
     const roadmapProgress =
       totalRoadmapMinutes > 0
@@ -232,78 +168,120 @@ export class DashboardService {
         : 0;
 
     // =========================================================
-    // EXECUTION SCORE
+    // ROADMAP TASK STATUS COUNTS
+    // CHANGE: uses status enum instead of completed boolean
+    // (completed column was dropped from tasks)
     // =========================================================
+    const totalRoadmapTasks = allTasks.length;
+    const completedRoadmapTasks = allTasks.filter(
+      (t) => t.status === "COMPLETED",
+    ).length;
+    const inProgressRoadmapTasks = allTasks.filter(
+      (t) => t.status === "IN_PROGRESS",
+    ).length;
 
+    // =========================================================
+    // TODAY TASK ANALYTICS
+    // Scoped to today's daily_tasks — reflects the current session.
+    // daily_tasks still has its own completed boolean (not dropped).
+    // =========================================================
+    const totalTodayTasks = todayTasks.length;
+    const completedTodayCount = todayTasks.filter((t) => t.completed).length;
+
+    const completionRate =
+      totalTodayTasks > 0
+        ? Math.round((completedTodayCount / totalTodayTasks) * 100)
+        : 0;
+
+    // =========================================================
+    // EXECUTION GRADE (based on today's completion rate)
+    // =========================================================
     let executionGrade = "C";
-
-    if (completionRate >= 90) {
-      executionGrade = "A";
-    } else if (completionRate >= 75) {
-      executionGrade = "B";
-    }
+    if (completionRate >= 90) executionGrade = "A";
+    else if (completionRate >= 75) executionGrade = "B";
 
     // =========================================================
-    // RETURN CLEAN DASHBOARD OBJECT
+    // CURRENT ACTIVE TASK
+    // First IN_PROGRESS task, or first PENDING if none in progress.
+    // Useful for "what to work on now" UI element.
     // =========================================================
+    const activeTask =
+      allTasks.find((t) => t.status === "IN_PROGRESS") ??
+      allTasks.find((t) => t.status === "PENDING") ??
+      null;
 
+    // =========================================================
+    // RETURN DASHBOARD
+    // =========================================================
     return {
       profile: {
         username: profile?.username,
-
         level: profile?.current_level,
-
         targetRole: profile?.target_role,
       },
 
       roadmap: {
-        title: roadmap?.title,
-
+        title: roadmap.title,
         progress: roadmapProgress,
+        totalTasks: totalRoadmapTasks,
+        completedTasks: completedRoadmapTasks,
+        inProgressTasks: inProgressRoadmapTasks,
       },
+
+      // CHANGE: phases now include live completion_percentage,
+      // total_tasks, completed_tasks, total_minutes, progress_minutes
+      // from the phase_progress view — never stale
+      phases,
+
+      // Current active task with percent complete — new addition
+      activeTask: activeTask
+        ? {
+            id: activeTask.id,
+            title: activeTask.title,
+            estimatedMinutes: activeTask.estimated_minutes,
+            progressMinutes: activeTask.progress_minutes,
+            percentComplete:
+              activeTask.estimated_minutes > 0
+                ? Math.round(
+                    (activeTask.progress_minutes /
+                      activeTask.estimated_minutes) *
+                      100,
+                  )
+                : 0,
+          }
+        : null,
 
       streak: {
         current: currentStreak,
       },
 
       tasks: {
-        today: tasks?.map((task) => ({
+        today: todayTasks.map((task) => ({
           id: task.id,
-
           title: task.title,
-
           estimatedMinutes: task.session_minutes,
-
           completed: task.completed,
+          completedAt: task.completed_at,
         })),
 
-        weekly:
-          weeklyTasks?.map((task) => ({
-            id: task.id,
-
-            title: task.title,
-
-            estimatedMinutes: task.session_minutes,
-
-            completed: task.completed,
-
-            scheduledFor: task.scheduled_for,
-          })) || [],
+        weekly: weeklyTasks.map((task) => ({
+          id: task.id,
+          title: task.title,
+          estimatedMinutes: task.session_minutes,
+          completed: task.completed,
+          scheduledFor: task.scheduled_for,
+        })),
       },
 
       analytics: {
         completionRate,
-
         executionGrade,
-
-        totalTasks,
-
-        completedTasks: completedTasks.length,
+        totalTodayTasks,
+        completedTodayTasks: completedTodayCount,
       },
 
       ai: {
         predictions,
-
         recovery,
       },
 

@@ -6,7 +6,9 @@ import { ArrowLeft, ArrowRight, Check, Eye, EyeOff, X } from "lucide-react";
 import { useEffect, useRef, useState, FC, ReactNode } from "react";
 
 import { login } from "../../lib/auth";
-import api from "../../lib/api";
+
+import { signInWithGoogle } from "../../lib/auth";
+import { useAuth } from "../../providers/AuthProvider";
 
 type FieldStatus = "idle" | "valid" | "invalid";
 
@@ -186,6 +188,7 @@ const StatusIcon: FC<StatusIconProps> = ({ status }) => {
 };
 
 export default function LoginPage() {
+  const { user, loading } = useAuth();
   const [showPassword, setShowPassword] = useState<boolean>(false);
   const [email, setEmail] = useState<string>("");
   const [password, setPassword] = useState<string>("");
@@ -194,6 +197,12 @@ export default function LoginPage() {
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
   const router = useRouter();
+
+  useEffect(() => {
+    if (!loading && user) {
+      router.replace("/roadmap");
+    }
+  }, [user, loading, router]);
 
   const isEmailValid: boolean = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
   const isPasswordValid: boolean = password.length >= 8;
@@ -228,33 +237,38 @@ export default function LoginPage() {
     try {
       setIsSubmitting(true);
       await login(email, password);
-      let destination = "/dashboard";
-
-      try {
-        await api.get("/api/roadmap");
-      } catch (error) {
-        const message =
-          typeof error === "object" && error && "response" in error
-            ? (error as { response?: { data?: { error?: string } } }).response?.data
-                ?.error
-            : null;
-
-        if (message?.toLowerCase().includes("no roadmap") || message?.toLowerCase().includes("no goal")) {
-          destination = "/onboarding";
-        }
-      }
-
-      router.replace(destination);
+      router.replace("/roadmap");
     } catch (error) {
       const message = error instanceof Error ? error.message : "Login failed.";
+      if (
+        message.toLowerCase().includes("email not confirmed") ||
+        message.toLowerCase().includes("confirm your email") ||
+        message.toLowerCase().includes("email not verified")
+      ) {
+        sessionStorage.setItem(`verify_email_pwd_${email}`, password);
+        sessionStorage.setItem("verify_email_email", email);
+        router.push(`/verify-email?email=${encodeURIComponent(email)}`);
+        return;
+      }
       setErrorMessage(message);
     } finally {
       setIsSubmitting(false);
     }
   };
 
+  if (loading || user) {
+    return null;
+  }
+  const handleGoogleSignup = async (): Promise<void> => {
+    try {
+      await signInWithGoogle();
+    } catch (error) {
+      console.error("Google signup failed:", error);
+    }
+  };
+
   return (
-    <main className="min-h-screen bg-[#090c0f] p-3 font-sans md:p-6">
+    <main className="min-h-screen bg-[#090c0f] p-3 font-(family-name:--font-inter) md:p-6">
       <div
         className="mx-auto flex min-h-[96vh] max-w-[1200px] overflow-hidden rounded-[28px] border border-[#171d24] bg-[#0e1318] shadow-2xl"
         style={{ animation: "fadeIn 0.5s ease both" }}
@@ -356,17 +370,17 @@ export default function LoginPage() {
               )}
 
               {/* ACTIONS */}
-              <div className="mt-6 flex items-center gap-5">
+              <div className="mt-8 flex items-center gap-5">
                 <button
                   type="submit"
-                  disabled={!allValid || isSubmitting}
+                  disabled={submitted && !allValid}
                   className={`group flex cursor-pointer items-center gap-3 rounded-full px-7 py-3 text-sm font-semibold transition-all duration-200 active:scale-95 ${
                     allValid
                       ? "bg-[#c4a27a] text-[#0e1318] hover:bg-[#b08f69]"
-                      : "cursor-not-allowed bg-[#1a2028] text-[#3e4850]"
+                      : "bg-[#1a2028] text-[#3e4850] cursor-not-allowed"
                   }`}
                 >
-                  {isSubmitting ? "Signing in" : "Sign in"}
+                  Sign in
                   <span
                     className={`flex h-6 w-6 items-center justify-center rounded-full transition-all ${
                       allValid ? "bg-black/10" : "bg-white/5"
@@ -378,8 +392,15 @@ export default function LoginPage() {
 
                 <span className="text-xs text-[#2e363f]">or</span>
 
-                <div className="text-xs text-[#4e5860]">
-                  Continue with SSO
+                <div className="flex gap-2">
+                  <button
+                  type="button"
+                    onClick={handleGoogleSignup}
+                    className="flex h-10 w-10 items-center justify-center rounded-full border border-[#1e252c] bg-[#0d1115] transition hover:border-[#c4a27a] active:scale-95"
+                  >
+                    <img src="https://cdn-icons-png.flaticon.com/512/300/300221.png" alt="Google" width={18} height={18} />
+                  </button>
+                  
                 </div>
               </div>
             </form>

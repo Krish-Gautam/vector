@@ -1,11 +1,12 @@
 import { Response } from "express";
 import { AuthRequest } from "../auth/auth.middleware.js";
 import { ProfileService } from "./profile.service.js";
+import { supabase } from "../../data/supabase.client.js";
 
 export class ProfileController {
   static async get(req: AuthRequest, res: Response) {
     try {
-      const userId = req.user.id;
+      const userId = req.authUser!.id;
       const data = await ProfileService.getProfileData(userId);
       res.json(data);
     } catch (error: any) {
@@ -19,15 +20,47 @@ export class ProfileController {
 
   static async update(req: AuthRequest, res: Response) {
     try {
-      const userId = req.user.id;
-      const { username, bio, avatarUrl, targetRole } = req.body;
-      const data = await ProfileService.updateProfile(userId, { username, bio, avatarUrl, targetRole });
-      res.json(data);
+      const userId = req.authUser!.id;
+
+      const { username, bio, targetRole } = req.body;
+
+      let avatarUrl: string | undefined;
+
+      if (req.file) {
+        const extension = req.file.originalname.split(".").pop();
+
+        const fileName = `${userId}.${extension}`;
+
+        const { error } = await supabase.storage
+          .from("avatars")
+          .upload(fileName, req.file.buffer, {
+            contentType: req.file.mimetype,
+            upsert: true,
+          });
+
+        if (error) throw error;
+
+        const { data } = supabase.storage
+          .from("avatars")
+          .getPublicUrl(fileName);
+
+        avatarUrl = data.publicUrl;
+      }
+
+      const result = await ProfileService.updateProfile(userId, {
+        username,
+        bio,
+        targetRole,
+        avatarUrl,
+      });
+
+      res.json(result);
     } catch (error: any) {
-      console.error("Error updating profile:", error);
+      console.error(error);
+
       res.status(500).json({
         success: false,
-        message: error.message || "Internal server error",
+        message: error.message,
       });
     }
   }

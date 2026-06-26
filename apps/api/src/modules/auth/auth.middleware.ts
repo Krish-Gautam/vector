@@ -1,26 +1,44 @@
 import { Request, Response, NextFunction } from "express";
+import { User } from "@supabase/supabase-js";
 import { supabase } from "../../data/supabase.client.js";
 
 export interface AuthRequest extends Request {
-  user?: any;
+  authUser?: User;
 }
 
-const verifyUser = async (
+export const verifyUser = async (
   req: AuthRequest,
   res: Response,
   next: NextFunction
-) => {
+): Promise<void> => {
   try {
     const authHeader = req.headers.authorization;
 
-    if (!authHeader?.startsWith("Bearer ")) {
-      return res.status(401).json({
+    if (!authHeader) {
+      res.status(401).json({
         success: false,
-        message: "Unauthorized",
+        message: "Authorization header is missing.",
       });
+      return;
     }
 
-    const token = authHeader.split(" ")[1];
+    if (!authHeader.startsWith("Bearer ")) {
+      res.status(401).json({
+        success: false,
+        message: "Invalid authorization format.",
+      });
+      return;
+    }
+
+    const token = authHeader.substring(7).trim();
+
+    if (!token) {
+      res.status(401).json({
+        success: false,
+        message: "Access token is missing.",
+      });
+      return;
+    }
 
     const {
       data: { user },
@@ -28,23 +46,23 @@ const verifyUser = async (
     } = await supabase.auth.getUser(token);
 
     if (error || !user) {
-      return res.status(401).json({
+      res.status(401).json({
         success: false,
-        message: "Invalid token",
+        message: "Invalid or expired access token.",
       });
+      return;
     }
 
-    req.user = user;
+    req.authUser = user;
+    (req as any).user = user;
 
     next();
   } catch (error) {
-    console.error(error);
+    console.error("Authentication middleware error:", error);
 
-    return res.status(500).json({
+    res.status(500).json({
       success: false,
-      message: "Server error",
+      message: "Internal server error.",
     });
   }
 };
-
-export default verifyUser;

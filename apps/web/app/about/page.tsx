@@ -70,7 +70,7 @@ const values = [
 
 export default function AboutSection() {
   return (
-    <section className="relative overflow-hidden bg-[#080808] text-white">
+    <section className="relative overflow-hidden bg-[#080808] text-white font-(family-name:--font-inter)">
       <Navbar />
 
       {/* Background glows */}

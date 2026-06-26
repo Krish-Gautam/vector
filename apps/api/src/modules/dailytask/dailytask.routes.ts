@@ -1,6 +1,6 @@
 import { Router } from "express";
 
-import verifyUser from "../auth/auth.middleware.js";
+import {verifyUser} from "../auth/auth.middleware.js";
 import {
   completeDailyTask,
   ensureWeeklyPlan,

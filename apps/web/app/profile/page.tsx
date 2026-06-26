@@ -42,11 +42,14 @@ export default function ProfilePage() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [profileData, setProfileData] = useState<ProfileData | null>(null);
-  
+
   // Editable form fields
   const [username, setUsername] = useState("");
   const [bio, setBio] = useState("");
   const [avatarUrl, setAvatarUrl] = useState("");
+
+  const [avatarFile, setAvatarFile] = useState<File | null>(null);
+  const [avatarPreview, setAvatarPreview] = useState("");
   const [targetRole, setTargetRole] = useState("");
   const [editSuccess, setEditSuccess] = useState(false);
 
@@ -54,16 +57,20 @@ export default function ProfilePage() {
     const fetchProfile = async () => {
       try {
         const response = await api.get("/api/profile");
-        console.log("Profile API response:", response);
+
         if (response.data?.success) {
+          const profile = response.data.data.profile;
+
           setProfileData(response.data.data);
-          setUsername(response.data.data.profile.username);
-          setBio(response.data.data.profile.bio);
-          setAvatarUrl(response.data.data.profile.avatarUrl);
-          setTargetRole(response.data.data.profile.targetRole);
+          setUsername(profile.username);
+          setBio(profile.bio);
+          setTargetRole(profile.targetRole);
+
+          setAvatarUrl(profile.avatarUrl);
+          setAvatarPreview(profile.avatarUrl);
         }
       } catch (error) {
-        console.error("Error loading profile data:", error);
+        console.error("Error loading profile:", error);
       } finally {
         setLoading(false);
       }
@@ -74,40 +81,77 @@ export default function ProfilePage() {
 
   const handleSaveChanges = async (e: React.FormEvent) => {
     e.preventDefault();
+
     if (saving) return;
 
     setSaving(true);
     setEditSuccess(false);
+
     try {
-      const response = await api.put("/api/profile", {
-        username,
-        bio,
-        avatarUrl,
-        targetRole,
+      const formData = new FormData();
+
+      formData.append("username", username);
+      formData.append("bio", bio);
+      formData.append("targetRole", targetRole);
+
+      if (avatarFile) {
+        formData.append("avatar", avatarFile);
+      }
+
+      const response = await api.put("/api/profile", formData, {
+        headers: {
+          "Content-Type": "multipart/form-data",
+        },
       });
 
-      if (response.data?.success) {
-        setProfileData((prev) => {
-          if (!prev) return null;
-          return {
-            ...prev,
-            profile: {
-              ...prev.profile,
-              username,
-              bio,
-              avatarUrl,
-              targetRole,
-            },
-          };
-        });
+      if (response.data.success) {
+        const profile = response.data.data.profile;
+
+        setProfileData((prev) =>
+          prev
+            ? {
+                ...prev,
+                profile,
+              }
+            : null,
+        );
+
+        setAvatarUrl(profile.avatarUrl);
+        setAvatarPreview(profile.avatarUrl);
+
         setEditSuccess(true);
-        setTimeout(() => setEditSuccess(false), 3000);
+
+        setTimeout(() => {
+          setEditSuccess(false);
+        }, 3000);
       }
-    } catch (error) {
-      console.error("Failed to update profile:", error);
+    } catch (err) {
+      console.error(err);
     } finally {
       setSaving(false);
     }
+  };
+
+  const handleAvatarChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+
+    if (!file) return;
+
+    if (!file.type.startsWith("image/")) {
+      alert("Please select an image.");
+      return;
+    }
+
+    if (file.size > 2 * 1024 * 1024) {
+      alert("Image must be under 2 MB.");
+      return;
+    }
+
+    setAvatarFile(file);
+
+    const preview = URL.createObjectURL(file);
+
+    setAvatarPreview(preview);
   };
 
   const containerVariants = {
@@ -117,6 +161,14 @@ export default function ProfilePage() {
       transition: { staggerChildren: 0.05 },
     },
   };
+
+  useEffect(() => {
+    return () => {
+      if (avatarPreview && avatarPreview.startsWith("blob:")) {
+        URL.revokeObjectURL(avatarPreview);
+      }
+    };
+  }, [avatarPreview]);
 
   const itemVariants = {
     hidden: { opacity: 0, y: 15 },
@@ -153,8 +205,8 @@ export default function ProfilePage() {
   }
 
   return (
-    <div className="min-h-screen bg-[#070b0a] text-zinc-200 antialiased selection:bg-white selection:text-black">
-      <div className="flex">
+    <div className="h-screen overflow-hidden font-(family-name:--font-inter) bg-[#070b0a] text-zinc-200 antialiased selection:bg-white selection:text-black">
+      <div className="flex h-full">
         {/* MOBILE SIDEBAR WRAPPER */}
         <div
           className={`fixed inset-0 z-50 xl:hidden transition-all duration-300 ${
@@ -203,7 +255,8 @@ export default function ProfilePage() {
                   Parameters & Roadmaps
                 </h1>
                 <p className="text-sm text-zinc-500 mt-0.5">
-                  Manage your credentials, bio details, and review actively linked execution streams.
+                  Manage your credentials, bio details, and review actively
+                  linked execution streams.
                 </p>
               </div>
 
@@ -220,47 +273,92 @@ export default function ProfilePage() {
 
             {/* SECTIONS WRAPPER */}
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-              
               {/* SECTION 1: PROFILE MANAGEMENT (LEFT & CENTER COLUMN) */}
-              <motion.div variants={itemVariants} className="lg:col-span-2 space-y-6">
+              <motion.div
+                variants={itemVariants}
+                className="lg:col-span-2 space-y-6"
+              >
                 <div className="bg-[#0b0c10]/40 border border-zinc-800/60 rounded-2xl p-6 backdrop-blur-md relative overflow-hidden">
                   <div className="flex items-center gap-3 mb-6 pb-4 border-b border-zinc-900/60">
                     <User className="h-5 w-5 text-zinc-400" />
                     <div>
-                      <h2 className="text-lg font-bold text-white">Identity Matrix</h2>
-                      <p className="text-xs text-zinc-500">Edit credentials, bio data, and user interface avatar.</p>
+                      <h2 className="text-lg font-bold text-white">
+                        Identity Matrix
+                      </h2>
+                      <p className="text-xs text-zinc-500">
+                        Edit credentials, bio data, and user interface avatar.
+                      </p>
                     </div>
                   </div>
 
                   <form onSubmit={handleSaveChanges} className="space-y-6">
-                    {/* AVATAR SELECTOR & PREVIEW */}
-                    <div className="flex flex-col sm:flex-row items-center gap-5 p-4 rounded-xl bg-zinc-900/10 border border-zinc-900/60">
-                      <div className="relative h-20 w-20 rounded-2xl bg-zinc-950 border border-zinc-800 flex items-center justify-center text-white text-3xl font-black font-mono overflow-hidden shrink-0 shadow-lg shadow-black/40">
-                        {avatarUrl ? (
-                          <img src={avatarUrl} alt={username} className="h-full w-full object-cover" />
-                        ) : (
-                          <span className="uppercase text-zinc-400 select-none">
-                            {username ? username.charAt(0) : "V"}
-                          </span>
-                        )}
-                      </div>
-                      <div className="flex-1 w-full space-y-2">
-                        <label className="text-xs font-bold font-mono uppercase tracking-wider text-zinc-500">Avatar Image Link</label>
-                        <input
-                          type="url"
-                          placeholder="https://example.com/avatar.jpg"
-                          value={avatarUrl}
-                          onChange={(e) => setAvatarUrl(e.target.value)}
-                          className="w-full bg-zinc-950/60 border border-zinc-800 focus:border-zinc-500 focus:outline-none rounded-xl px-4 py-2 text-sm text-white placeholder-zinc-700 transition-all font-mono"
-                        />
-                        <p className="text-[10px] text-zinc-600">Provide a hosted URL for your profile avatar.</p>
+                    {/* AVATAR */}
+                    <div className="rounded-2xl border border-zinc-800 bg-zinc-950/60 p-6">
+                      <div className="flex flex-col gap-6 sm:flex-row sm:items-center">
+                        {/* Avatar */}
+                        <div className="relative mx-auto sm:mx-0">
+                          <div className="h-28 w-28 overflow-hidden rounded-full border-2 border-zinc-700 bg-zinc-900 shadow-lg">
+                            {avatarPreview ? (
+                              <img
+                                src={avatarPreview}
+                                alt={username}
+                                className="h-full w-full object-cover"
+                              />
+                            ) : (
+                              <div className="flex h-full w-full items-center justify-center text-4xl font-bold text-zinc-400">
+                                {username
+                                  ? username.charAt(0).toUpperCase()
+                                  : "V"}
+                              </div>
+                            )}
+                          </div>
+                        </div>
+
+                        {/* Controls */}
+                        <div className="flex-1 space-y-4">
+                          <div>
+                            <h3 className="text-lg font-semibold text-white">
+                              Profile Picture
+                            </h3>
+
+                            <p className="mt-1 text-sm text-zinc-500">
+                              Upload a JPG, PNG or WEBP image. Maximum size 2
+                              MB.
+                            </p>
+                          </div>
+
+                          <input
+                            id="avatar-upload"
+                            type="file"
+                            accept="image/png,image/jpeg,image/webp"
+                            className="hidden"
+                            onChange={handleAvatarChange}
+                          />
+
+                          <div className="flex flex-wrap items-center gap-3">
+                            <label
+                              htmlFor="avatar-upload"
+                              className="cursor-pointer rounded-xl bg-white px-5 py-2.5 text-sm font-semibold text-black transition hover:bg-zinc-200"
+                            >
+                              Change Photo
+                            </label>
+
+                            {avatarFile && (
+                              <span className="rounded-lg border border-emerald-700 bg-emerald-900/20 px-3 py-1 text-xs font-medium text-emerald-400">
+                                {avatarFile.name}
+                              </span>
+                            )}
+                          </div>
+                        </div>
                       </div>
                     </div>
 
                     {/* INPUT MATRIX */}
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
                       <div className="space-y-2">
-                        <label className="text-xs font-bold font-mono uppercase tracking-wider text-zinc-500">Username</label>
+                        <label className="text-xs font-bold font-mono uppercase tracking-wider text-zinc-500">
+                          Username
+                        </label>
                         <input
                           type="text"
                           required
@@ -271,7 +369,9 @@ export default function ProfilePage() {
                         />
                       </div>
                       <div className="space-y-2">
-                        <label className="text-xs font-bold font-mono uppercase tracking-wider text-zinc-500">Target Role</label>
+                        <label className="text-xs font-bold font-mono uppercase tracking-wider text-zinc-500">
+                          Target Role
+                        </label>
                         <input
                           type="text"
                           required
@@ -286,8 +386,12 @@ export default function ProfilePage() {
                     {/* BIO FIELD */}
                     <div className="space-y-2">
                       <div className="flex justify-between items-center">
-                        <label className="text-xs font-bold font-mono uppercase tracking-wider text-zinc-500">Bio Narrative</label>
-                        <span className="text-[10px] font-mono text-zinc-600">{bio.length} characters</span>
+                        <label className="text-xs font-bold font-mono uppercase tracking-wider text-zinc-500">
+                          Bio Narrative
+                        </label>
+                        <span className="text-[10px] font-mono text-zinc-600">
+                          {bio.length} characters
+                        </span>
                       </div>
                       <textarea
                         rows={4}
@@ -312,11 +416,11 @@ export default function ProfilePage() {
                           </motion.span>
                         )}
                       </div>
-                      
+
                       <button
                         type="submit"
                         disabled={saving}
-                        className="flex items-center gap-1.5 px-4 py-2 bg-white text-black hover:bg-zinc-200 disabled:opacity-50 disabled:cursor-not-allowed rounded-xl text-xs font-bold transition-all shadow-md shadow-white/5"
+                        className="flex items-center cursor-pointer gap-1.5 px-4 py-2 bg-white text-black hover:bg-zinc-200 disabled:opacity-50 disabled:cursor-not-allowed rounded-xl text-xs font-bold transition-all shadow-md shadow-white/5"
                       >
                         {saving ? (
                           <>
@@ -341,24 +445,33 @@ export default function ProfilePage() {
                   <div className="flex items-center gap-3 mb-6 pb-4 border-b border-zinc-900/60">
                     <Target className="h-5 w-5 text-zinc-400" />
                     <div>
-                      <h2 className="text-lg font-bold text-white">Active Roadmap</h2>
-                      <p className="text-xs text-zinc-500">Metrics linked to your profile parameters.</p>
+                      <h2 className="text-lg font-bold text-white">
+                        Active Roadmap
+                      </h2>
+                      <p className="text-xs text-zinc-500">
+                        Metrics linked to your profile parameters.
+                      </p>
                     </div>
                   </div>
 
                   {!profileData.roadmap ? (
                     <div className="py-12 text-center border border-dashed border-zinc-900 rounded-xl">
                       <Bookmark className="h-8 w-8 text-zinc-700 mx-auto mb-3" />
-                      <p className="text-xs font-bold text-zinc-500 uppercase tracking-wider">No linked roadmap</p>
+                      <p className="text-xs font-bold text-zinc-500 uppercase tracking-wider">
+                        No linked roadmap
+                      </p>
                       <p className="text-[11px] text-zinc-600 mt-1 max-w-[200px] mx-auto leading-normal">
-                        Navigate to the goals setup page to synthesize your custom execution curriculum.
+                        Navigate to the goals setup page to synthesize your
+                        custom execution curriculum.
                       </p>
                     </div>
                   ) : (
                     <div className="space-y-6">
                       {/* GOAL COMPONENT */}
                       <div className="space-y-2">
-                        <span className="text-[10px] font-bold font-mono uppercase tracking-widest text-zinc-500">SYNTHESIZED GOAL</span>
+                        <span className="text-[10px] font-bold font-mono uppercase tracking-widest text-zinc-500">
+                          SYNTHESIZED GOAL
+                        </span>
                         <div className="p-3.5 rounded-xl border border-zinc-800 bg-zinc-950/40 flex items-start gap-3">
                           <Target className="h-4.5 w-4.5 text-zinc-400 shrink-0 mt-0.5" />
                           <div className="min-w-0">
@@ -371,7 +484,9 @@ export default function ProfilePage() {
 
                       {/* TITLE COMPONENT */}
                       <div className="space-y-2">
-                        <span className="text-[10px] font-bold font-mono uppercase tracking-widest text-zinc-500">ROADMAP TITLE</span>
+                        <span className="text-[10px] font-bold font-mono uppercase tracking-widest text-zinc-500">
+                          ROADMAP TITLE
+                        </span>
                         <div className="p-3.5 rounded-xl border border-zinc-800 bg-zinc-950/40 flex items-start gap-3">
                           <PenTool className="h-4.5 w-4.5 text-zinc-400 shrink-0 mt-0.5" />
                           <div className="min-w-0">
@@ -388,25 +503,34 @@ export default function ProfilePage() {
                         <div className="p-3.5 rounded-xl border border-zinc-900 bg-zinc-950/20">
                           <div className="flex items-center gap-1.5 text-zinc-500 mb-1">
                             <Calendar className="h-3.5 w-3.5" />
-                            <span className="text-[9px] font-bold font-mono uppercase tracking-wider">Duration</span>
+                            <span className="text-[9px] font-bold font-mono uppercase tracking-wider">
+                              Duration
+                            </span>
                           </div>
                           <span className="text-xl font-extrabold font-mono text-white">
                             {profileData.roadmap.totalWeeks}
                           </span>
-                          <span className="text-[10px] text-zinc-500 font-semibold font-mono ml-1">weeks</span>
+                          <span className="text-[10px] text-zinc-500 font-semibold font-mono ml-1">
+                            weeks
+                          </span>
                         </div>
 
                         {/* GENERATED BY COMPONENT */}
                         <div className="p-3.5 rounded-xl border border-zinc-900 bg-zinc-950/20">
                           <div className="flex items-center gap-1.5 text-zinc-500 mb-1">
                             <Sparkles className="h-3.5 w-3.5" />
-                            <span className="text-[9px] font-bold font-mono uppercase tracking-wider">Engine</span>
+                            <span className="text-[9px] font-bold font-mono uppercase tracking-wider">
+                              Engine
+                            </span>
                           </div>
                           <span className="text-xs font-bold text-zinc-300 block truncate leading-relaxed">
                             {profileData.roadmap.generatedBy.split(" ")[0]}
                           </span>
                           <span className="text-[8px] text-zinc-500 block truncate font-mono mt-0.5">
-                            {profileData.roadmap.generatedBy.split(" ").slice(1).join(" ")}
+                            {profileData.roadmap.generatedBy
+                              .split(" ")
+                              .slice(1)
+                              .join(" ")}
                           </span>
                         </div>
                       </div>
@@ -414,7 +538,9 @@ export default function ProfilePage() {
                       {/* LEVEL DETAILS BAR */}
                       <div className="p-4 rounded-xl border border-zinc-900 bg-zinc-950/40 space-y-3">
                         <div className="flex items-center justify-between text-xs">
-                          <span className="text-zinc-500 font-medium">Execution Tier</span>
+                          <span className="text-zinc-500 font-medium">
+                            Execution Tier
+                          </span>
                           <span className="font-bold text-white font-mono uppercase flex items-center gap-1">
                             <Award className="h-3.5 w-3.5 text-emerald-400" />
                             {profileData.profile.currentLevel}
@@ -427,7 +553,7 @@ export default function ProfilePage() {
 
                       {/* VIEW DETAIL ACTION LINK */}
                       <button
-                        onClick={() => window.location.href = "/roadmap"}
+                        onClick={() => (window.location.href = "/roadmap")}
                         className="w-full flex items-center justify-between p-3.5 rounded-xl border border-zinc-800 bg-zinc-900/10 hover:bg-[#0d0e12]/40 hover:border-zinc-700 text-xs font-bold text-zinc-300 hover:text-white transition-all group focus:outline-none"
                       >
                         <span>Inspect Timeline Breakdown</span>

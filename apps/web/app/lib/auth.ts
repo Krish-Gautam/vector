@@ -39,3 +39,12 @@ export async function login(
 
   return data;
 }
+
+export async function signInWithGoogle() {
+  await supabase.auth.signInWithOAuth({
+    provider: "google",
+    options: {
+      redirectTo: `${window.location.origin}/callback`,
+    },
+  });
+}

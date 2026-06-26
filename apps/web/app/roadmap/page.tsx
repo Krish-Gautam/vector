@@ -1,9 +1,9 @@
-import RoadmapPage from "./RoadmapPage";
+import RoadmapGate from "./RoadmapGate";
 
 export const metadata = {
   title: "Your Roadmap",
 };
 
-export default function DashboardPage() {
-  return <RoadmapPage />;
+export default function RoadmapServerPage() {
+  return <RoadmapGate />;
 }

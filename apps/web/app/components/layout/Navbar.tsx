@@ -55,63 +55,59 @@ export default function Navbar() {
   };
 
   return (
-    <header className="fixed left-1/2 top-6 z-50 w-[94%] max-w-6xl -translate-x-1/2 rounded-full border border-white/10 bg-black/80 shadow-[0_12px_40px_rgba(0,0,0,0.6)] backdrop-blur-2xl ring-1 ring-white/5">
-      <div className="mx-auto flex h-14 max-w-6xl items-center justify-between px-5">
-        {/* LOGO */}
-        <Link href="/" className="flex items-center gap-2">
-          <Image
-            src="/logo2.png"
-            alt="Vector Logo"
-            width={100}
-            height={100}
-          />
+    <header className="fixed left-1/2 top-4 md:top-6 z-50 w-[94%] max-w-6xl -translate-x-1/2 rounded-full border border-white/10 bg-black/80 shadow-[0_12px_40px_rgba(0,0,0,0.6)] backdrop-blur-2xl ring-1 ring-white/5">
+      <div className="mx-auto flex h-12 md:h-14 max-w-6xl items-center justify-between px-3 md:px-5">
+
+        {/* LOGO — desktop shows logo2, mobile shows bird */}
+        <Link href="/" className="hidden md:flex shrink-0">
+          <Image src="/logo2.png" alt="Vector Logo" width={100} height={100} />
+        </Link>
+        <Link href="/" className="flex md:hidden shrink-0">
+          <Image src="/bird.png" alt="Vector Logo" width={32} height={32} />
         </Link>
 
-
         {/* NAV */}
-        <nav className="hidden items-center gap-2 md:flex">
+        <nav className="flex items-center gap-1 md:gap-1">
           {navItems.map((item) => {
             const Icon = item.icon;
             return (
               <Link href={item.href} key={item.label}>
-                <button className="group cursor-pointer flex items-center gap-2 rounded-full border border-transparent px-4 py-2 text-sm font-medium text-zinc-300 transition hover:border-white/15 hover:bg-white/5 hover:text-white">
-                  
+                <button className="group cursor-pointer flex items-center gap-1.5 rounded-full border border-transparent px-1 md:px-2.5 py-2 md:px-4 md:py-2 text-xs md:text-sm md:font-medium text-zinc-300 transition hover:border-white/15 hover:bg-white/5 hover:text-white">
                   <Icon
-                    size={18}
-                    className="text-zinc-400 transition group-hover:text-white"
+                    size={16}
+                    className="shrink-0 text-zinc-400 transition group-hover:text-white md:w-[18px] md:h-[18px]"
                   />
-                  {item.label}
+                  {/* Label visible only on md+ */}
+                  <span className="hidden inline">{item.label}</span>
                 </button>
               </Link>
             );
           })}
         </nav>
 
-        {/* PROFILE */}
+        {/* PROFILE / AUTH */}
         {loading ? (
-          <div className="flex items-center gap-2">
-            <div className="h-11 w-11 rounded-full border border-white/10 bg-zinc-950" />
+          <div className="flex items-center gap-2 shrink-0">
+            <div className="h-8 w-8 md:h-11 md:w-11 rounded-full border border-white/10 bg-zinc-950" />
             <ChevronDown
-              size={18}
-              className={clsx(
-                "text-zinc-400 transition duration-300 cursor-pointer",
-                open && "rotate-180",
-              )}
+              size={16}
+              className="text-zinc-400 transition duration-300 cursor-pointer hidden md:block"
             />
           </div>
         ) : userEmail ? (
-          <div className="relative" ref={dropdownRef}>
+          <div className="relative shrink-0" ref={dropdownRef}>
             <button
               onClick={() => setOpen((prev) => !prev)}
-              className="flex items-center gap-2"
+              className="flex items-center gap-1.5 md:gap-2"
             >
-              <div className="flex h-11 w-11 items-center justify-center rounded-full border border-white/10 bg-zinc-950">
-                <User size={18} className="text-zinc-300" />
+              <div className="flex h-8 w-8 md:h-11 md:w-11 items-center justify-center rounded-full border border-white/10 bg-zinc-950">
+                <User size={15} className="text-zinc-300 md:hidden" />
+                <User size={18} className="text-zinc-300 hidden md:block" />
               </div>
               <ChevronDown
-                size={18}
+                size={16}
                 className={clsx(
-                  "text-zinc-400 transition duration-300 cursor-pointer",
+                  "text-zinc-400 transition duration-300 cursor-pointer hidden md:block",
                   open && "rotate-180",
                 )}
               />
@@ -120,37 +116,35 @@ export default function Navbar() {
             {/* DROPDOWN */}
             <div
               className={clsx(
-                "absolute right-0 top-16 w-[300px] overflow-hidden rounded-2xl border border-white/10 bg-black/95 shadow-[0_20px_80px_rgba(0,0,0,0.8)] transition-all duration-200",
+                "absolute right-0 top-12 md:top-16 w-[260px] md:w-[300px] overflow-hidden rounded-2xl border border-white/10 bg-black/95 shadow-[0_20px_80px_rgba(0,0,0,0.8)] transition-all duration-200",
                 open
                   ? "visible translate-y-0 opacity-100"
                   : "invisible -translate-y-2 opacity-0",
               )}
             >
               {/* TOP */}
-              <div className="flex items-center gap-4 border-b border-white/10 px-3 py-3">
-                <div className="flex h-8 w-8 items-center justify-center rounded-full bg-zinc-800">
-                  <User size={22} className="text-zinc-300" />
+              <div className="flex items-center gap-3 md:gap-4 border-b border-white/10 px-3 py-3">
+                <div className="flex h-8 w-8 items-center justify-center rounded-full bg-zinc-800 shrink-0">
+                  <User size={18} className="text-zinc-300" />
                 </div>
-                <div>
-                  <h3 className="text-[13px] font-semibold text-white">
+                <div className="min-w-0">
+                  <h3 className="text-[13px] font-semibold text-white truncate">
                     {userName ?? "Profile"}
                   </h3>
-                  <p className="text-[12px] text-zinc-400">{userEmail}</p>
+                  <p className="text-[12px] text-zinc-400 truncate">{userEmail}</p>
                 </div>
               </div>
 
               {/* ITEMS */}
-              <div className="py-2 ">
+              <div className="py-2">
                 {dropdownItems.map((item) => {
                   const Icon = item.icon;
                   return (
                     <Link href={item.href} key={item.label}>
                       <button className="flex w-full items-center cursor-pointer justify-between px-3 py-2 transition hover:bg-white/5">
                         <div className="flex items-center gap-3">
-                          <Icon size={18} className="text-zinc-400" />
-                          <span className={clsx("text-sm font-medium")}>
-                            {item.label}
-                          </span>
+                          <Icon size={18} className="text-zinc-400 shrink-0" />
+                          <span className="text-sm font-medium">{item.label}</span>
                         </div>
                       </button>
                     </Link>
@@ -171,23 +165,22 @@ export default function Navbar() {
             </div>
           </div>
         ) : (
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2 shrink-0">
             <Link
               href="/login"
-              className="rounded-full border border-white/20 px-4 py-2 text-sm font-semibold text-white transition hover:border-white/40 hover:bg-white/5"
+              className="rounded-full border border-white/20 px-3 md:px-4 py-1.5 md:py-2 text-xs md:text-sm font-semibold text-white transition hover:border-white/40 hover:bg-white/5"
             >
               Login
             </Link>
             <Link
               href="/signin"
-              className="rounded-full bg-white px-4 py-2 text-sm font-semibold text-black transition hover:opacity-90"
+              className="rounded-full bg-white px-3 md:px-4 py-1.5 md:py-2 text-xs md:text-sm font-semibold text-black transition hover:opacity-90"
             >
               Sign Up
             </Link>
           </div>
         )}
       </div>
-      {/* ↑ closes max-w-7xl div */}
     </header>
   );
 }

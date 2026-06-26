@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Brain, ArrowRight, Sparkles } from "lucide-react";
 import { motion } from "framer-motion";
@@ -10,9 +10,6 @@ export default function OnboardingPage() {
   const router = useRouter();
 
   const [loading, setLoading] = useState(false);
-  const [checkingRoadmap, setCheckingRoadmap] = useState(true);
-  const [checkError, setCheckError] = useState<string | null>(null);
-  const [checkNonce, setCheckNonce] = useState(0);
 
   const [form, setForm] = useState({
     goal: "",
@@ -28,94 +25,13 @@ export default function OnboardingPage() {
 
       await api.post("/api/roadmap/generate", form);
 
-      router.push("/dashboard");
+      router.replace("/roadmap");
     } catch (error) {
       console.error(error);
     } finally {
       setLoading(false);
     }
   };
-
-  useEffect(() => {
-    let active = true;
-
-    const checkRoadmap = async () => {
-      setCheckError(null);
-
-      try {
-        await api.get("/api/roadmap");
-
-        if (active) {
-          router.replace("/dashboard");
-        }
-      } catch (error) {
-        const message =
-          typeof error === "object" && error && "response" in error
-            ? (error as { response?: { data?: { error?: string } } }).response
-                ?.data?.error
-            : null;
-
-        const isMissingRoadmap =
-          message?.toLowerCase().includes("no roadmap") ||
-          message?.toLowerCase().includes("no goal");
-
-        if (!isMissingRoadmap) {
-          console.error("Failed to verify roadmap:", error);
-          if (active) {
-            setCheckError("Unable to verify your roadmap. Please try again.");
-          }
-        }
-
-        if (active) {
-          setCheckingRoadmap(false);
-        }
-      }
-    };
-
-    checkRoadmap();
-
-    return () => {
-      active = false;
-    };
-  }, [router, checkNonce]);
-
-  if (checkingRoadmap) {
-    return (
-      <div className="relative min-h-screen bg-black text-white">
-        <div className="absolute inset-0 bg-[radial-gradient(circle_at_top,_rgba(255,255,255,0.08),_transparent_55%)]" />
-        <div className="relative mx-auto flex min-h-screen max-w-4xl items-center justify-center px-6">
-          <div className="rounded-3xl border border-white/10 bg-zinc-950/80 px-8 py-10 text-center">
-            <p className="text-sm uppercase tracking-[0.2em] text-white/60">Checking access</p>
-            <p className="mt-3 text-lg text-white/80">Verifying your roadmap status...</p>
-          </div>
-        </div>
-      </div>
-    );
-  }
-
-  if (checkError) {
-    return (
-      <div className="relative min-h-screen bg-black text-white">
-        <div className="absolute inset-0 bg-[radial-gradient(circle_at_top,_rgba(255,255,255,0.08),_transparent_55%)]" />
-        <div className="relative mx-auto flex min-h-screen max-w-4xl items-center justify-center px-6">
-          <div className="rounded-3xl border border-white/10 bg-zinc-950/80 px-8 py-10 text-center">
-            <p className="text-sm uppercase tracking-[0.2em] text-white/60">Access check failed</p>
-            <p className="mt-3 text-lg text-white/80">{checkError}</p>
-            <button
-              onClick={() => {
-                setCheckError(null);
-                setCheckingRoadmap(true);
-                setCheckNonce((prev) => prev + 1);
-              }}
-              className="mt-6 rounded-full border border-white/20 px-5 py-2 text-sm font-semibold text-white transition hover:border-white/40 hover:bg-white/5"
-            >
-              Retry
-            </button>
-          </div>
-        </div>
-      </div>
-    );
-  }
 
   return (
     <div className="relative min-h-screen overflow-hidden bg-black text-white">

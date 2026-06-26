@@ -1,8 +1,15 @@
 import { supabase } from "../../data/supabase.client.js";
 
+interface UpdateProfilePayload {
+  username?: string;
+  bio?: string;
+  avatarUrl?: string;
+  targetRole?: string;
+}
+
 export class ProfileService {
   static async getProfileData(userId: string) {
-    // 1. Fetch profile table data
+    // Fetch profile
     const { data: profile, error: profileError } = await supabase
       .from("profiles")
       .select("*")
@@ -13,7 +20,7 @@ export class ProfileService {
       throw profileError;
     }
 
-    // 2. Fetch the latest goal
+    // Fetch latest goal
     const { data: goal, error: goalError } = await supabase
       .from("user_goals")
       .select("id, title, current_level, created_at")
@@ -29,7 +36,6 @@ export class ProfileService {
     let roadmapData = null;
 
     if (goal) {
-      // 3. Fetch linked roadmap
       const { data: roadmap, error: roadmapError } = await supabase
         .from("roadmaps")
         .select("*")
@@ -41,21 +47,26 @@ export class ProfileService {
       }
 
       if (roadmap) {
-        // Calculate weeks dynamically as fallback if total_weeks column doesn't exist/is null
         const { data: phases } = await supabase
           .from("roadmap_phases")
           .select("estimated_days")
           .eq("roadmap_id", roadmap.id);
-        
-        const calculatedWeeks = phases 
-          ? Math.ceil(phases.reduce((sum, phase) => sum + (phase.estimated_days || 0), 0) / 7)
+
+        const calculatedWeeks = phases
+          ? Math.ceil(
+              phases.reduce(
+                (sum, phase) => sum + (phase.estimated_days || 0),
+                0
+              ) / 7
+            )
           : 0;
 
         roadmapData = {
           id: roadmap.id,
           title: roadmap.title,
-          totalWeeks: roadmap.total_weeks ?? calculatedWeeks ?? 0,
-          generatedBy: roadmap.generated_by ?? "AI Engine (OpenAI GPT-4)",
+          totalWeeks: roadmap.total_weeks ?? calculatedWeeks,
+          generatedBy:
+            roadmap.generated_by ?? "AI Engine (OpenAI GPT-4)",
           goal: goal.title,
           createdAt: roadmap.created_at,
         };
@@ -66,23 +77,43 @@ export class ProfileService {
       success: true,
       data: {
         profile: {
-          username: profile?.username || "Developer",
-          bio: profile?.bio || "No bio added yet.",
-          avatarUrl: profile?.avatar_url || "",
-          currentLevel: profile?.current_level || "Beginner",
-          targetRole: profile?.target_role || "",
+          username: profile?.username ?? "Developer",
+          bio: profile?.bio ?? "",
+          avatarUrl: profile?.avatar_url ?? "",
+          currentLevel: profile?.current_level ?? "Beginner",
+          targetRole: profile?.target_role ?? "",
         },
         roadmap: roadmapData,
       },
     };
   }
 
-  static async updateProfile(userId: string, payload: { username?: string; bio?: string; avatarUrl?: string; targetRole?: string }) {
-    const updatePayload: any = {};
-    if (payload.username !== undefined) updatePayload.username = payload.username;
-    if (payload.bio !== undefined) updatePayload.bio = payload.bio;
-    if (payload.avatarUrl !== undefined) updatePayload.avatar_url = payload.avatarUrl;
-    if (payload.targetRole !== undefined) updatePayload.target_role = payload.targetRole;
+  static async updateProfile(
+    userId: string,
+    payload: UpdateProfilePayload
+  ) {
+    const updatePayload: Partial<{
+      username: string;
+      bio: string;
+      avatar_url: string;
+      target_role: string;
+    }> = {};
+
+    if (payload.username !== undefined) {
+      updatePayload.username = payload.username;
+    }
+
+    if (payload.bio !== undefined) {
+      updatePayload.bio = payload.bio;
+    }
+
+    if (payload.avatarUrl !== undefined) {
+      updatePayload.avatar_url = payload.avatarUrl;
+    }
+
+    if (payload.targetRole !== undefined) {
+      updatePayload.target_role = payload.targetRole;
+    }
 
     const { data, error } = await supabase
       .from("profiles")
@@ -98,10 +129,13 @@ export class ProfileService {
     return {
       success: true,
       data: {
-        username: data.username,
-        bio: data.bio,
-        avatarUrl: data.avatar_url,
-        targetRole: data.target_role,
+        profile: {
+          username: data.username,
+          bio: data.bio,
+          avatarUrl: data.avatar_url,
+          currentLevel: data.current_level,
+          targetRole: data.target_role,
+        },
       },
     };
   }

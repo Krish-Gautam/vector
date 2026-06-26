@@ -7,7 +7,7 @@ export const getDashboard = async (
   res: Response,
 ) => {
   try {
-    const userId = req.user.id;
+    const userId = req.authUser!.id;
 
     const dashboard =
       await dashboardService.getDashboard(userId);
@@ -16,12 +16,13 @@ export const getDashboard = async (
       success: true,
       data: dashboard,
     });
-  } catch (error) {
+  } catch (error: any) {
     console.error(error);
 
     return res.status(500).json({
       success: false,
       message: "Failed to fetch dashboard",
+      error: error.message,
     });
   }
 };

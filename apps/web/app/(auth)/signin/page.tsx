@@ -3,7 +3,10 @@
 import { ArrowLeft, ArrowRight, Eye, EyeOff, Check, X } from "lucide-react";
 import { useState, useEffect, useRef, FC, ReactNode } from "react";
 import { signUp } from "../../lib/auth";
+import {signInWithGoogle} from "../../lib/auth";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
+import { useAuth } from "../../providers/AuthProvider";
 
 interface Rule {
   id: string;
@@ -221,6 +224,7 @@ const SocialBtn: FC<SocialBtnProps> = ({ alt, src }) => (
 );
 
 export default function SignUpPage() {
+  const { user, loading } = useAuth();
   const [showPassword, setShowPassword] = useState<boolean>(false);
   const [name, setName] = useState<string>("");
   const [email, setEmail] = useState<string>("");
@@ -228,7 +232,14 @@ export default function SignUpPage() {
   const [confirm, setConfirm] = useState<string>("");
   const [touched, setTouched] = useState<TouchedFields>({});
   const [submitted, setSubmitted] = useState<boolean>(false);
+  const [isSubmitting,setIsSubmitting]=useState(false)
   const router = useRouter();
+
+  useEffect(() => {
+    if (!loading && user) {
+      router.replace("/roadmap");
+    }
+  }, [user, loading, router]);
 
   const isEmailValid: boolean = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
   const isNameValid: boolean = name.trim().length >= 2;
@@ -261,12 +272,23 @@ export default function SignUpPage() {
     setTouched((t) => ({ ...t, [key]: true }));
   };
 
+  const handleGoogleSignup = async (): Promise<void> => {
+  try {
+    await signInWithGoogle();
+  } catch (error) {
+    console.error("Google signup failed:", error);
+  }
+};
+
   const handleSubmit = async (
     e: React.FormEvent<HTMLFormElement>,
   ): Promise<void> => {
     e.preventDefault();
 
     setSubmitted(true);
+    if(isSubmitting) return;
+
+    setIsSubmitting(true)
 
     setTouched({
       name: true,
@@ -277,15 +299,26 @@ export default function SignUpPage() {
 
     try {
       await signUp(email, password, name);
-
       console.log("Signup successful");
+      sessionStorage.setItem(`verify_email_pwd_${email}`, password);
+      sessionStorage.setItem("verify_email_email", email);
+      router.push(`/verify-email?email=${encodeURIComponent(email)}`);
     } catch (error) {
       console.error(error);
     }
+    finally{
+
+setIsSubmitting(false)
+
+}
   };
 
+  if (loading || user) {
+    return null;
+  }
+
   return (
-    <main className="min-h-screen bg-[#090c0f] p-3 md:p-6 font-sans">
+    <main className="min-h-screen font-(family-name:--font-inter) bg-[#090c0f] p-3 md:p-6 ">
       <div
         className="mx-auto flex min-h-[96vh] max-w-[1200px] overflow-hidden rounded-[28px] border border-[#171d24] bg-[#0e1318] shadow-2xl"
         style={{ animation: "fadeIn 0.5s ease both" }}
@@ -304,9 +337,12 @@ export default function SignUpPage() {
 
             <p className="text-sm text-[#4e5860]">
               Already a member?{" "}
-              <span className="cursor-pointer font-semibold text-[#c4a27a] underline-offset-2 hover:underline">
+              <Link
+                href="/login"
+                className="font-semibold text-[#c4a27a] underline-offset-2 hover:underline"
+              >
                 Sign in
-              </span>
+              </Link>
             </p>
           </div>
 
@@ -450,7 +486,7 @@ export default function SignUpPage() {
               <div className="mt-8 flex items-center gap-5">
                 <button
                   type="submit"
-                  disabled={submitted && !allValid}
+                  disabled={isSubmitting && !allValid}
                   className={`group flex cursor-pointer items-center gap-3 rounded-full px-7 py-3 text-sm font-semibold transition-all duration-200 active:scale-95 ${
                     allValid
                       ? "bg-[#c4a27a] text-[#0e1318] hover:bg-[#b08f69]"
@@ -470,14 +506,14 @@ export default function SignUpPage() {
                 <span className="text-xs text-[#2e363f]">or</span>
 
                 <div className="flex gap-2">
-                  <SocialBtn
-                    alt="Google"
-                    src="https://cdn-icons-png.flaticon.com/512/300/300221.png"
-                  />
-                  <SocialBtn
-                    alt="Facebook"
-                    src="https://cdn-icons-png.flaticon.com/512/733/733547.png"
-                  />
+                  <button
+                  type="button"
+                    onClick={handleGoogleSignup}
+                    className="flex h-10 w-10 items-center justify-center rounded-full border border-[#1e252c] bg-[#0d1115] transition hover:border-[#c4a27a] active:scale-95"
+                  >
+                    <img src="https://cdn-icons-png.flaticon.com/512/300/300221.png" alt="Google" width={18} height={18} />
+                  </button>
+                  
                 </div>
               </div>
             </form>

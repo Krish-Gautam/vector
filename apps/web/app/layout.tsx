@@ -21,13 +21,12 @@ const instrument = Instrument_Serif({
   variable: "--font-instrument",
 });
 
-export const metadata: Metadata = {
+export const metadata = {
   title: "Vector | AI-Powered Goal Tracking & Accountability",
-  description:   "AI-powered roadmaps and goal-focused communities to help you stay accountable and achieve more.",
+  description:
+    "AI-powered roadmaps and goal-focused communities to help you stay accountable and achieve more.",
   icons: {
-    icon: [
-      { url: "/icon.png", sizes: "192x192" },
-    ],
+    icon: "/icon.png",
   },
 };
 

@@ -11,24 +11,24 @@ type SidebarProps = {
   onNavigate?: () => void;
 };
 
-export default function Sidebar({ variant = "desktop", onNavigate }: SidebarProps) {
+export default function Sidebar({
+  variant = "desktop",
+  onNavigate,
+}: SidebarProps) {
   const pathname = usePathname();
   const baseClasses =
-    "w-[260px] flex-col border-r border-zinc-800/50 bg-[#0A0A0A] px-4 py-2";
+    "w-[260px] h-screen flex-shrink-0 flex-col border-r border-zinc-800/50 bg-[#0A0A0A] px-4 py-2";
   const wrapperClasses =
-    variant === "desktop" ? `hidden xl:flex ${baseClasses}` : `flex ${baseClasses}`;
+    variant === "desktop"
+      ? `hidden xl:flex ${baseClasses}`
+      : `flex ${baseClasses}`;
 
   return (
     <aside className={wrapperClasses}>
       {/* Logo */}
       <div className="mb-8 flex items-center px-2">
         <Link href="/" className="">
-          <Image
-            src="/bird.png"
-            alt="Vector Logo"
-            width={50}
-            height={50}
-          />
+          <Image src="/bird.png" alt="Vector Logo" width={50} height={50} />
         </Link>
         <div className="mt-3">
           <Image
@@ -53,7 +53,8 @@ export default function Sidebar({ variant = "desktop", onNavigate }: SidebarProp
               {group.items.map((item) => {
                 const Icon = item.icon;
                 const isActive =
-                  pathname === item.href || pathname.startsWith(`${item.href}/`);
+                  pathname === item.href ||
+                  pathname.startsWith(`${item.href}/`);
 
                 return (
                   <Link

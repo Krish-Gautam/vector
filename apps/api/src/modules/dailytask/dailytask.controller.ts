@@ -9,7 +9,7 @@ export const completeDailyTask =
     res: Response,
   ) => {
     try {
-      const userId = req.user.id;
+      const userId = req.authUser!.id;
 
       const taskId = Array.isArray(req.params.id)
   ? req.params.id[0]
@@ -38,7 +38,7 @@ export const generateWeeklyTasks =
     res: Response,
   ) => {
     try {
-      const userId = req.user.id;
+      const userId = req.authUser!.id;
 
       const result =
         await dailyTaskService.generateWeeklyTasks(userId);
@@ -63,7 +63,7 @@ export const ensureWeeklyPlan =
     res: Response,
   ) => {
     try {
-      const userId = req.user.id;
+      const userId = req.authUser!.id;
 
       const result =
         await dailyTaskService.ensureWeeklyPlan(userId);
@@ -88,7 +88,7 @@ export const generateNextWeeklyPlan =
     res: Response,
   ) => {
     try {
-      const userId = req.user.id;
+      const userId = req.authUser!.id;
 
       const result =
         await dailyTaskService.generateNextWeeklyPlan(userId);

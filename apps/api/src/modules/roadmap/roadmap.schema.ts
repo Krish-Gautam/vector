@@ -1,25 +1,25 @@
 import { z } from "zod";
 
 export const roadmapSchema = z.object({
-  roadmap_title: z.string(),
+  roadmap_title: z.string().trim().min(1),
 
   phases: z.array(
     z.object({
-      title: z.string(),
+      title: z.string().trim().min(1),
 
-      description: z.string(),
+      description: z.string().trim().min(1),
 
-      duration_weeks: z.number(),
+      duration_weeks: z.number().int().positive(),
 
       tasks: z.array(
         z.object({
-          title: z.string(),
+          title: z.string().trim().min(1),
 
-          description: z.string(),
+          description: z.string().trim().min(1),
 
-          estimated_minutes: z.number(),
+          estimated_minutes: z.number().int().positive(),
 
-          task_order: z.number(),
+          task_order: z.number().int().positive(),
 
           difficulty: z.enum([
             "EASY",
@@ -27,9 +27,9 @@ export const roadmapSchema = z.object({
             "HARD",
           ]),
         })
-      ),
+      ).min(1),
     })
-  ),
+  ).min(1),
 });
 
 export type RoadmapType =

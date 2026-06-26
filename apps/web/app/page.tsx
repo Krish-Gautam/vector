@@ -8,6 +8,7 @@ import { ArrowRight, Menu, X } from "lucide-react";
 import Navbar from "./components/layout/Navbar";
 import Footer from "./components/layout/Footer";
 import FeaturesSection from "./components/features/FeaturesSection";
+import Link from "next/link";
 
 const navItems = ["PROJECTS", "BLOG", "ABOUT", "RESUME"];
 
@@ -69,44 +70,49 @@ export default function CodeNestHero() {
         <div className="absolute left-3/4 top-0 h-full w-px bg-white/10" />
       </div>
 
-      
-
       {/* ================= HERO ================= */}
       <section className="relative  flex min-h-[50vh] md:min-h-screen items-center">
         <div className="mx-auto flex w-full max-w-7xl flex-col px-6 pt-32 pb-20 text-center md:text-left md:px-10">
-
           {/* Eyebrow */}
-          <span className="mb-5 text-[11px]  font-bold uppercase tracking-[0.2em] text-[#7fb8ff]">
+          <span className="mb-5 text-[11px] font-(family-name:--font-inter) font-bold uppercase tracking-[0.2em] text-[#7fb8ff]">
             Career-Ready Curriculum
           </span>
 
           {/* Headline */}
-          <div className="max-w-5xl text-[30px] font-bold uppercase leading-[0.95] tracking-tight sm:text-[52px] md:text-[64px] lg:text-[72px]">
-            Stop Planning. <br />Start Executing
+          <div className="max-w-5xl text-[30px] font-bold font-(family-name:--font-inter) uppercase leading-[0.95] tracking-tight sm:text-[52px] md:text-[64px] lg:text-[72px]">
+            Stop Planning. <br />
+            Start Executing
             <span className="text-[#7fb8ff]">.</span>
           </div>
 
           {/* Description */}
-          <p className="mt-7 max-w-[512px] text-[14px] leading-7 text-white/70 md:text-[15px]">
-            Vector bridges the gap between ambition and execution by helping students stay consistent, track progress, and achieve career goals with structured guidance and AI-powered recommendations.
+          <p className="mt-7 font-(family-name:--font-inter) max-w-[512px] text-[14px] leading-7 text-white/70 md:text-[15px]">
+            Vector bridges the gap between ambition and execution by helping
+            students stay consistent, track progress, and achieve career goals
+            with structured guidance and AI-powered recommendations.
           </p>
+
 
           {/* CTA */}
           <div className="mt-10 flex gap-2">
-            <button className="group inline-flex items-center gap-3 rounded-full bg-[#4f8cff] px-7 py-4 text-sm font-bold uppercase tracking-wide text-[#06060f] transition-all duration-300 hover:scale-[1.02] hover:bg-[#3f78e6]">
+            <Link
+              href="/roadmap"
+              className="inline-flex font-(family-name:--font-inter) items-center gap-3 rounded-full bg-[#4f8cff] px-4 py-3 md:px-7 md:py-4 text-sm md:font-bold uppercase tracking-wide text-[#06060f] transition-all duration-300 hover:scale-[1.02] hover:bg-[#3f78e6]"
+            >
               Start for free
-
               <span className="transition-transform duration-300 group-hover:translate-x-1">
                 <ArrowRight size={18} strokeWidth={2.5} />
               </span>
-            </button>
-            <button className="group inline-flex items-center gap-3 rounded-full border border-[#7fb8ff]/40 px-7 py-4 text-sm font-bold uppercase tracking-wide text-[#7fb8ff] transition-all duration-300 hover:scale-[1.02] hover:bg-[#7fb8ff]/10">
+            </Link>
+            <Link
+              href="/plus"
+              className="inline-flex font-(family-name:--font-inter) items-center gap-3 rounded-full border-3 border-[#7fb8ff]/40 px-4 py-3 md:px-7 md:py-4 text-sm md:font-bold uppercase tracking-wide text-[#7fb8ff] transition-all duration-300 hover:scale-[1.02] hover:bg-[#7fb8ff]/10"
+            >
               Explore Plus
-
               <span className="transition-transform duration-300 group-hover:translate-x-1">
                 <ArrowRight size={18} strokeWidth={2.5} />
               </span>
-            </button>
+            </Link>
           </div>
         </div>
       </section>
@@ -117,7 +123,6 @@ export default function CodeNestHero() {
       <div className="relative z-10">
         <Footer />
       </div>
-
     </main>
   );
 }
