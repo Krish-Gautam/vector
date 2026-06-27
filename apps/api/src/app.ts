@@ -17,10 +17,10 @@ const app = express();
 // ── CORS — must allow Authorization header ─────────────────
 app.use(
   cors({
-    origin: ['http://localhost:3000', 'http://localhost:3001','https://wallpaper-identified-york-extend.trycloudflare.com'],
+    origin: process.env.FRONTEND_URL,
     credentials: true,
-    allowedHeaders: ['Content-Type', 'Authorization'],   // ← KEY FIX
-    methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+    methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+    allowedHeaders: ["Content-Type", "Authorization"],
   })
 );
 

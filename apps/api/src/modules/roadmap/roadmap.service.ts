@@ -231,7 +231,6 @@ export class RoadmapService {
         (acc, task) => acc + task.estimated_minutes,
         0,
       );
-      console.log("input", input);
       const maxMinutes =
         phase.duration_weeks * 7 * (input.dailyHours ?? 2) * 60;
       if (totalMinutes > maxMinutes * 1.2) {

@@ -23,7 +23,7 @@ export class ProfileService {
     // Fetch latest goal
     const { data: goal, error: goalError } = await supabase
       .from("user_goals")
-      .select("id, title, current_level, created_at")
+      .select("id, title, current_level, progress_percentage, zone_status, created_at")
       .eq("user_id", userId)
       .order("created_at", { ascending: false })
       .limit(1)
@@ -73,6 +73,30 @@ export class ProfileService {
       }
     }
 
+    const currentLevel = (goal?.current_level || "beginner").toLowerCase();
+    const progressPercentage = goal?.progress_percentage || 0;
+
+    let nextLevel = "intermediate";
+    let levelProgress = 0;
+
+    if (currentLevel === "beginner") {
+      nextLevel = "intermediate";
+      levelProgress = Math.min(100, Math.round((progressPercentage / 35) * 100));
+    } else if (currentLevel === "intermediate") {
+      nextLevel = "advanced";
+      if (progressPercentage < 35) {
+        levelProgress = Math.min(100, Math.round((progressPercentage / 75) * 100));
+      } else {
+        levelProgress = Math.min(
+          100,
+          Math.round(((progressPercentage - 35) / (75 - 35)) * 100)
+        );
+      }
+    } else {
+      nextLevel = "max";
+      levelProgress = 100;
+    }
+
     return {
       success: true,
       data: {
@@ -80,8 +104,12 @@ export class ProfileService {
           username: profile?.username ?? "Developer",
           bio: profile?.bio ?? "",
           avatarUrl: profile?.avatar_url ?? "",
-          currentLevel: profile?.current_level ?? "Beginner",
+          currentLevel: currentLevel,
+          nextLevel: nextLevel,
+          levelProgress: levelProgress,
+          goalProgress: progressPercentage,
           targetRole: profile?.target_role ?? "",
+          zoneStatus: goal?.zone_status ?? "ON_TRACK",
         },
         roadmap: roadmapData,
       },
@@ -126,15 +154,52 @@ export class ProfileService {
       throw error;
     }
 
+    // Fetch latest goal for currentLevel / level progress
+    const { data: goal } = await supabase
+      .from("user_goals")
+      .select("current_level, progress_percentage, zone_status")
+      .eq("user_id", userId)
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .single();
+
+    const currentLevel = (goal?.current_level || "beginner").toLowerCase();
+    const progressPercentage = goal?.progress_percentage || 0;
+
+    let nextLevel = "intermediate";
+    let levelProgress = 0;
+
+    if (currentLevel === "beginner") {
+      nextLevel = "intermediate";
+      levelProgress = Math.min(100, Math.round((progressPercentage / 35) * 100));
+    } else if (currentLevel === "intermediate") {
+      nextLevel = "advanced";
+      if (progressPercentage < 35) {
+        levelProgress = Math.min(100, Math.round((progressPercentage / 75) * 100));
+      } else {
+        levelProgress = Math.min(
+          100,
+          Math.round(((progressPercentage - 35) / (75 - 35)) * 100)
+        );
+      }
+    } else {
+      nextLevel = "max";
+      levelProgress = 100;
+    }
+
     return {
       success: true,
       data: {
         profile: {
-          username: data.username,
-          bio: data.bio,
-          avatarUrl: data.avatar_url,
-          currentLevel: data.current_level,
-          targetRole: data.target_role,
+          username: data.username ?? "Developer",
+          bio: data.bio ?? "",
+          avatarUrl: data.avatar_url ?? "",
+          currentLevel: currentLevel,
+          nextLevel: nextLevel,
+          levelProgress: levelProgress,
+          goalProgress: progressPercentage,
+          targetRole: data.target_role ?? "",
+          zoneStatus: goal?.zone_status ?? "ON_TRACK",
         },
       },
     };

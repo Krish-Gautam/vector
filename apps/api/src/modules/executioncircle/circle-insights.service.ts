@@ -15,12 +15,12 @@ export class CircleInsightsService {
     // 1. Fetch this circle's members
     const { data: members, error: membersError } = await this.supabase
       .from('circle_members')
-      .select('user_id, streak_days, accountability_score')
+      .select('user_id, accountability_score')
       .eq('circle_id', circleId);
 
     if (membersError) throw new Error(membersError.message);
     if (!members || members.length === 0) {
-      return { avg_score: 0, better_than: 0, avg_streak: 0, avg_completion: 0 };
+      return { avg_score: 0, better_than: 0, avg_completion: 0 };
     }
 
     const memberCount = members.length;
@@ -30,9 +30,9 @@ export class CircleInsightsService {
     const avgScore = Math.round(
       members.reduce((sum, m) => sum + (m.accountability_score ?? 0), 0) / memberCount,
     );
-    const avgStreak = Math.round(
-      members.reduce((sum, m) => sum + (m.streak_days ?? 0), 0) / memberCount,
-    );
+    // const avgStreak = Math.round(
+    //   members.reduce((sum, m) => sum + (m.streak_days ?? 0), 0) / memberCount,
+    // );
 
     // 3. Avg task completion rate from daily_tasks (source of truth)
     const { data: tasks, error: tasksError } = await this.supabase
@@ -80,7 +80,6 @@ export class CircleInsightsService {
     return {
       avg_score: avgScore,
       better_than: betterThan,
-      avg_streak: avgStreak,
       avg_completion: avgCompletion,
     };
   }

@@ -5,10 +5,9 @@ import { useRouter } from "next/navigation";
 import { ArrowLeft, ArrowRight, Check, Eye, EyeOff, X } from "lucide-react";
 import { useEffect, useRef, useState, FC, ReactNode } from "react";
 
-import { login } from "../../lib/auth";
-
-import { signInWithGoogle } from "../../lib/auth";
+import { login, signInWithGoogle } from "../../lib/auth";
 import { useAuth } from "../../providers/AuthProvider";
+import { supabase } from "../../lib/supabase";
 
 type FieldStatus = "idle" | "valid" | "invalid";
 
@@ -196,6 +195,8 @@ export default function LoginPage() {
   const [submitted, setSubmitted] = useState<boolean>(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
+  const [mode, setMode] = useState<"login" | "forgot">("login");
+  const [resetSent, setResetSent] = useState<boolean>(false);
   const router = useRouter();
 
   useEffect(() => {
@@ -206,7 +207,7 @@ export default function LoginPage() {
 
   const isEmailValid: boolean = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
   const isPasswordValid: boolean = password.length >= 8;
-  const allValid: boolean = isEmailValid && isPasswordValid;
+  const allValid: boolean = mode === "login" ? (isEmailValid && isPasswordValid) : isEmailValid;
 
   const fieldStatus = (key: keyof TouchedFields, valid: boolean): FieldStatus => {
     if (!touched[key] && !submitted) return "idle";
@@ -229,9 +230,29 @@ export default function LoginPage() {
     e.preventDefault();
 
     setSubmitted(true);
-    setTouched({ email: true, password: true });
     setErrorMessage(null);
 
+    if (mode === "forgot") {
+      setTouched({ email: true });
+      if (!isEmailValid || isSubmitting) return;
+
+      try {
+        setIsSubmitting(true);
+        const { error } = await supabase.auth.resetPasswordForEmail(email, {
+          redirectTo: `${window.location.origin}/callback?next=/reset-password`,
+        });
+        if (error) throw error;
+        setResetSent(true);
+      } catch (error) {
+        const message = error instanceof Error ? error.message : "Failed to send reset email.";
+        setErrorMessage(message);
+      } finally {
+        setIsSubmitting(false);
+      }
+      return;
+    }
+
+    setTouched({ email: true, password: true });
     if (!allValid || isSubmitting) return;
 
     try {
@@ -301,109 +322,226 @@ export default function LoginPage() {
             className="mx-auto w-full max-w-[400px] py-8"
             style={{ animation: "fadeUp 0.6s ease both" }}
           >
-            <p className="mb-2 text-xs uppercase tracking-[0.2em] text-[#4e5860]">
-              Welcome back
-            </p>
-            <h1 className="text-4xl font-semibold tracking-tight text-[#f0ebe2]">
-              Sign in
-            </h1>
-            <p className="mt-2 text-sm text-[#4e5860]">
-              Access your secure workspace in seconds.
-            </p>
-
-            <form onSubmit={handleSubmit} className="mt-10 space-y-6">
-              {/* EMAIL */}
-              <Field
-                label="Email address"
-                borderClass={borderClass(fieldStatus("email", isEmailValid))}
-              >
-                <input
-                  type="email"
-                  value={email}
-                  placeholder=""
-                  onChange={(e) => setEmail(e.target.value)}
-                  onBlur={() => handleBlur("email")}
-                  className="w-full bg-transparent text-sm text-[#e8e3d9] outline-none placeholder:text-[#2e363f]"
-                />
-                <StatusIcon status={fieldStatus("email", isEmailValid)} />
-              </Field>
-
-              {/* PASSWORD */}
-              <div>
-                <Field
-                  label="Password"
-                  borderClass={borderClass(
-                    fieldStatus("password", isPasswordValid)
-                  )}
-                >
-                  <input
-                    type={showPassword ? "text" : "password"}
-                    value={password}
-                    placeholder=""
-                    onChange={(e) => setPassword(e.target.value)}
-                    onBlur={() => handleBlur("password")}
-                    className="w-full bg-transparent text-sm text-[#e8e3d9] outline-none placeholder:text-[#2e363f]"
-                  />
+            {mode === "forgot" ? (
+              resetSent ? (
+                <div className="space-y-6">
+                  <div className="flex h-12 w-12 items-center justify-center rounded-full bg-[#4a9d74]/10 border border-[#4a9d74]/20 text-[#4a9d74]">
+                    <Check className="h-6 w-6" />
+                  </div>
+                  <div>
+                    <h1 className="text-4xl font-semibold tracking-tight text-[#f0ebe2]">
+                      Check your email
+                    </h1>
+                    <p className="mt-3 text-sm text-[#6b7580] leading-6">
+                      We have sent a secure password reset link to <span className="text-[#e8e3d9] font-medium">{email}</span>. Please click the link in that email to reset your password.
+                    </p>
+                  </div>
                   <button
                     type="button"
-                    onClick={() => setShowPassword((v) => !v)}
-                    className="text-[#3e4850] transition hover:text-[#c4a27a]"
-                    aria-label="Toggle password visibility"
+                    onClick={() => {
+                      setMode("login");
+                      setResetSent(false);
+                      setEmail("");
+                      setPassword("");
+                      setSubmitted(false);
+                      setErrorMessage(null);
+                    }}
+                    className="flex cursor-pointer items-center justify-center rounded-full bg-[#c4a27a] px-7 py-3 text-sm font-semibold text-[#0e1318] transition-all duration-200 hover:bg-[#b08f69] active:scale-95"
                   >
-                    {showPassword ? (
-                      <EyeOff className="h-4 w-4" />
-                    ) : (
-                      <Eye className="h-4 w-4" />
-                    )}
+                    Back to sign in
                   </button>
-                </Field>
-
-                <p className="mt-2 text-xs text-[#2e363f]">
-                  Use at least 8 characters.
-                </p>
-              </div>
-
-              {errorMessage && (
-                <p className="rounded-2xl border border-[#3a2623] bg-[#1c1211] px-4 py-3 text-xs text-[#d28a7a]">
-                  {errorMessage}
-                </p>
-              )}
-
-              {/* ACTIONS */}
-              <div className="mt-8 flex items-center gap-5">
-                <button
-                  type="submit"
-                  disabled={submitted && !allValid}
-                  className={`group flex cursor-pointer items-center gap-3 rounded-full px-7 py-3 text-sm font-semibold transition-all duration-200 active:scale-95 ${
-                    allValid
-                      ? "bg-[#c4a27a] text-[#0e1318] hover:bg-[#b08f69]"
-                      : "bg-[#1a2028] text-[#3e4850] cursor-not-allowed"
-                  }`}
-                >
-                  Sign in
-                  <span
-                    className={`flex h-6 w-6 items-center justify-center rounded-full transition-all ${
-                      allValid ? "bg-black/10" : "bg-white/5"
-                    }`}
-                  >
-                    <ArrowRight className="h-3.5 w-3.5" />
-                  </span>
-                </button>
-
-                <span className="text-xs text-[#2e363f]">or</span>
-
-                <div className="flex gap-2">
-                  <button
-                  type="button"
-                    onClick={handleGoogleSignup}
-                    className="flex h-10 w-10 items-center justify-center rounded-full border border-[#1e252c] bg-[#0d1115] transition hover:border-[#c4a27a] active:scale-95"
-                  >
-                    <img src="https://cdn-icons-png.flaticon.com/512/300/300221.png" alt="Google" width={18} height={18} />
-                  </button>
-                  
                 </div>
+              ) : (
+                <div className="space-y-6">
+                  <div>
+                    <p className="mb-2 text-xs uppercase tracking-[0.2em] text-[#4e5860]">
+                      Account recovery
+                    </p>
+                    <h1 className="text-4xl font-semibold tracking-tight text-[#f0ebe2]">
+                      Reset password
+                    </h1>
+                    <p className="mt-2 text-sm text-[#4e5860]">
+                      Enter your email below to get a secure reset link.
+                    </p>
+                  </div>
+
+                  <form onSubmit={handleSubmit} className="mt-10 space-y-6">
+                    {/* EMAIL */}
+                    <Field
+                      label="Email address"
+                      borderClass={borderClass(fieldStatus("email", isEmailValid))}
+                    >
+                      <input
+                        type="email"
+                        value={email}
+                        placeholder="Enter your email"
+                        onChange={(e) => setEmail(e.target.value)}
+                        onBlur={() => handleBlur("email")}
+                        className="w-full bg-transparent text-sm text-[#e8e3d9] outline-none placeholder:text-[#2e363f]"
+                      />
+                      <StatusIcon status={fieldStatus("email", isEmailValid)} />
+                    </Field>
+
+                    {errorMessage && (
+                      <p className="rounded-2xl border border-[#3a2623] bg-[#1c1211] px-4 py-3 text-xs text-[#d28a7a]">
+                        {errorMessage}
+                      </p>
+                    )}
+
+                    <div className="mt-8 flex flex-col gap-4">
+                      <button
+                        type="submit"
+                        disabled={submitted && !isEmailValid}
+                        className={`group flex cursor-pointer items-center justify-between rounded-full px-7 py-3 text-sm font-semibold transition-all duration-200 active:scale-95 ${
+                          isEmailValid
+                            ? "bg-[#c4a27a] text-[#0e1318] hover:bg-[#b08f69]"
+                            : "bg-[#1a2028] text-[#3e4850] cursor-not-allowed"
+                        }`}
+                      >
+                        Send reset link
+                        <span
+                          className={`flex h-6 w-6 items-center justify-center rounded-full transition-all ${
+                            isEmailValid ? "bg-black/10" : "bg-white/5"
+                          }`}
+                        >
+                          <ArrowRight className="h-3.5 w-3.5" />
+                        </span>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setMode("login");
+                          setSubmitted(false);
+                          setErrorMessage(null);
+                        }}
+                        className="text-center text-xs font-semibold text-[#4e5860] hover:text-[#c4a27a] transition-colors"
+                      >
+                        Cancel and return to sign in
+                      </button>
+                    </div>
+                  </form>
+                </div>
+              )
+            ) : (
+              <div>
+                <p className="mb-2 text-xs uppercase tracking-[0.2em] text-[#4e5860]">
+                  Welcome back
+                </p>
+                <h1 className="text-4xl font-semibold tracking-tight text-[#f0ebe2]">
+                  Sign in
+                </h1>
+                <p className="mt-2 text-sm text-[#4e5860]">
+                  Access your secure workspace in seconds.
+                </p>
+
+                <form onSubmit={handleSubmit} className="mt-10 space-y-6">
+                  {/* EMAIL */}
+                  <Field
+                    label="Email address"
+                    borderClass={borderClass(fieldStatus("email", isEmailValid))}
+                  >
+                    <input
+                      type="email"
+                      value={email}
+                      placeholder=""
+                      onChange={(e) => setEmail(e.target.value)}
+                      onBlur={() => handleBlur("email")}
+                      className="w-full bg-transparent text-sm text-[#e8e3d9] outline-none placeholder:text-[#2e363f]"
+                    />
+                    <StatusIcon status={fieldStatus("email", isEmailValid)} />
+                  </Field>
+
+                  {/* PASSWORD */}
+                  <div>
+                    <Field
+                      label="Password"
+                      borderClass={borderClass(
+                        fieldStatus("password", isPasswordValid)
+                      )}
+                    >
+                      <input
+                        type={showPassword ? "text" : "password"}
+                        value={password}
+                        placeholder=""
+                        onChange={(e) => setPassword(e.target.value)}
+                        onBlur={() => handleBlur("password")}
+                        className="w-full bg-transparent text-sm text-[#e8e3d9] outline-none placeholder:text-[#2e363f]"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowPassword((v) => !v)}
+                        className="text-[#3e4850] transition hover:text-[#c4a27a]"
+                        aria-label="Toggle password visibility"
+                      >
+                        {showPassword ? (
+                          <EyeOff className="h-4 w-4" />
+                        ) : (
+                          <Eye className="h-4 w-4" />
+                        )}
+                      </button>
+                    </Field>
+
+                    <div className="flex justify-between items-center mt-2.5">
+                      <p className="text-xs text-[#2e363f]">
+                        Use at least 8 characters.
+                      </p>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setMode("forgot");
+                          setSubmitted(false);
+                          setErrorMessage(null);
+                        }}
+                        className="text-xs font-semibold text-[#c4a27a] hover:text-[#b08f69] hover:underline transition-colors"
+                      >
+                        Forgot password?
+                      </button>
+                    </div>
+                  </div>
+
+                  {errorMessage && (
+                    <p className="rounded-2xl border border-[#3a2623] bg-[#1c1211] px-4 py-3 text-xs text-[#d28a7a]">
+                      {errorMessage}
+                    </p>
+                  )}
+
+                  {/* ACTIONS */}
+                  <div className="mt-8 flex items-center gap-5">
+                    <button
+                      type="submit"
+                      disabled={submitted && !allValid}
+                      className={`group flex cursor-pointer items-center gap-3 rounded-full px-7 py-3 text-sm font-semibold transition-all duration-200 active:scale-95 ${
+                        allValid
+                          ? "bg-[#c4a27a] text-[#0e1318] hover:bg-[#b08f69]"
+                          : "bg-[#1a2028] text-[#3e4850] cursor-not-allowed"
+                      }`}
+                    >
+                      Sign in
+                      <span
+                        className={`flex h-6 w-6 items-center justify-center rounded-full transition-all ${
+                          allValid ? "bg-black/10" : "bg-white/5"
+                        }`}
+                      >
+                        <ArrowRight className="h-3.5 w-3.5" />
+                      </span>
+                    </button>
+
+                    <span className="text-xs text-[#2e363f]">or</span>
+
+                    <div className="flex gap-2">
+                      <button
+                        type="button"
+                        onClick={handleGoogleSignup}
+                        className="flex h-10 w-10 items-center justify-center rounded-full border border-[#1e252c] bg-[#0d1115] transition hover:border-[#c4a27a] active:scale-95"
+                      >
+                        <img src="https://cdn-icons-png.flaticon.com/512/300/300221.png" alt="Google" width={18} height={18} />
+                      </button>
+                    </div>
+                  </div>
+                </form>
               </div>
-            </form>
+            )}
           </div>
 
           {/* FOOTER */}

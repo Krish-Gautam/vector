@@ -1,5 +1,6 @@
 import { supabase } from "../../data/supabase.client.js";
 import { dailyTaskService } from "../dailytask/dailytask.service.js";
+import { zoneStatusService } from "../dailytask/zone-status.service.js";
 
 export class DashboardService {
   async getDashboard(userId: string) {
@@ -22,7 +23,7 @@ export class DashboardService {
       supabase.from("profiles").select("*").eq("id", userId).single(),
       supabase
         .from("user_goals")
-        .select("id")
+        .select("id, current_level, progress_percentage, zone_status")
         .eq("user_id", userId)
         .order("created_at", { ascending: false })
         .limit(1)
@@ -30,9 +31,22 @@ export class DashboardService {
     ]);
 
     const profile = profileResult.data;
-    const goal = goalResult.data;
+    let goal = goalResult.data;
 
     if (!goal) throw new Error("No goal found");
+
+    // Sync zone status
+    const newZoneStatus = await zoneStatusService.syncZoneStatus(userId, {
+      timezone: profile?.timezone ?? "Asia/Kolkata",
+      currentGoal: {
+        id: goal.id,
+        zone_status: goal.zone_status,
+      },
+    });
+
+    if (newZoneStatus !== goal.zone_status) {
+      goal = { ...goal, zone_status: newZoneStatus };
+    }
 
     const today = new Date();
     today.setHours(0, 0, 0, 0);
@@ -216,8 +230,9 @@ export class DashboardService {
     return {
       profile: {
         username: profile?.username,
-        level: profile?.current_level,
+        level: goal?.current_level ?? "beginner",
         targetRole: profile?.target_role,
+        zoneStatus: goal?.zone_status ?? "ON_TRACK",
       },
 
       roadmap: {
@@ -236,19 +251,19 @@ export class DashboardService {
       // Current active task with percent complete — new addition
       activeTask: activeTask
         ? {
-            id: activeTask.id,
-            title: activeTask.title,
-            estimatedMinutes: activeTask.estimated_minutes,
-            progressMinutes: activeTask.progress_minutes,
-            percentComplete:
-              activeTask.estimated_minutes > 0
-                ? Math.round(
-                    (activeTask.progress_minutes /
-                      activeTask.estimated_minutes) *
-                      100,
-                  )
-                : 0,
-          }
+          id: activeTask.id,
+          title: activeTask.title,
+          estimatedMinutes: activeTask.estimated_minutes,
+          progressMinutes: activeTask.progress_minutes,
+          percentComplete:
+            activeTask.estimated_minutes > 0
+              ? Math.round(
+                (activeTask.progress_minutes /
+                  activeTask.estimated_minutes) *
+                100,
+              )
+              : 0,
+        }
         : null,
 
       streak: {

@@ -1525,11 +1525,8 @@ export default function ExecutionCirclePage() {
 
       setFeed(feedData.posts);
       setInsights(insightsData as CircleInsights | null);
-      console.log("Fetched insights:", insightsData);
       setActivities(activitiesData);
-      console.log("Fetched activities:", activitiesData);
       setLeaderboard(leaderboardData);
-      console.log("Fetched leaderboard:", leaderboardData);
     } catch (e: any) {
       setError(e.message);
     } finally {

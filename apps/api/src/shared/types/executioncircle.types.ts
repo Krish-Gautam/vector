@@ -231,6 +231,5 @@ export type CreateCommentInput = CreateCommentRequest;
 export interface CircleInsights {
   avg_score: number;
   better_than: number;
-  avg_streak: number;
   avg_completion: number;
 }

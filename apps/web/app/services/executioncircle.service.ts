@@ -15,7 +15,7 @@ import {
 
 import { supabase } from '../lib/supabase';
 
-const BASE = 'http://localhost:5000/api/execution-circle';
+const BASE = `${process.env.NEXT_PUBLIC_API_BASE_URL}/api/execution-circle`;
 
 async function apiFetch<T>(path: string, options?: RequestInit): Promise<T> {
   const {

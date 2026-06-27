@@ -12,7 +12,7 @@ export default function Footer() {
         <div className="flex flex-col items-center justify-between gap-8 lg:flex-row">
           {/* Logo */}
           <div className="flex items-center gap-2">
-            <span className="text-3xl font-bold text-[#7fb8ff]">Vector</span>
+            <img src="/vector1.png" alt="Vector Logo" width={150} height={150} />
  
           </div>
 

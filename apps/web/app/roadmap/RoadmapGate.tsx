@@ -80,7 +80,6 @@ export default function RoadmapGate() {
             ? (err as { response?: { data?: { error?: string } } }).response
                 ?.data?.error
             : null;
-            console.log("Error fetching roadmap:", message, err);
 
         const isMissingRoadmap =
           message?.toLowerCase().includes("no roadmap") ||

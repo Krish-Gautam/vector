@@ -4,6 +4,9 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { Crown, Settings, LogOut, User } from "lucide-react";
 import Image from "next/image";
+import { useRouter } from "next/navigation";
+
+import { useAuth } from "../../providers/AuthProvider";
 import { sidebarGroups } from "./sidebarData";
 
 type SidebarProps = {
@@ -22,7 +25,14 @@ export default function Sidebar({
     variant === "desktop"
       ? `hidden xl:flex ${baseClasses}`
       : `flex ${baseClasses}`;
+      const router = useRouter();
 
+const {  signOut } = useAuth();
+  const handleLogout = async () => {
+    await signOut();
+    router.push("/login");
+
+  };
   return (
     <aside className={wrapperClasses}>
       {/* Logo */}
@@ -92,11 +102,7 @@ export default function Sidebar({
           <User size={18} strokeWidth={2} />
           Profile
         </Link>
-        <button className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium text-zinc-400 transition-colors hover:bg-zinc-900 hover:text-white">
-          <Settings size={18} strokeWidth={2} />
-          Settings
-        </button>
-        <button className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium text-zinc-400 transition-colors hover:bg-zinc-900 hover:text-white">
+        <button  onClick={handleLogout} className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium text-zinc-400 transition-colors hover:bg-zinc-900 hover:text-white">
           <LogOut size={18} strokeWidth={2} />
           Logout
         </button>

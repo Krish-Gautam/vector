@@ -1,4 +1,5 @@
 import { supabase } from "../../data/supabase.client.js";
+import { zoneStatusService } from "./zone-status.service.js";
 
 export class DailyTaskService {
   // =========================================================
@@ -147,9 +148,31 @@ export class DailyTaskService {
     // tasks if one finishes before the day's minutes are used up.
     // =========================================================
 
+    // Account for existing scheduled daily tasks to prevent over-scheduling
+    const taskIds = tasks.map((t: any) => t.id);
+    const { data: existingDailyTasks } = await supabase
+      .from("daily_tasks")
+      .select("roadmap_task_id, session_minutes")
+      .eq("user_id", userId)
+      .in("roadmap_task_id", taskIds);
+
+    const scheduledMinutesMap = new Map<string, number>();
+    (existingDailyTasks || []).forEach((dt: any) => {
+      const current = scheduledMinutesMap.get(dt.roadmap_task_id) || 0;
+      scheduledMinutesMap.set(
+        dt.roadmap_task_id,
+        current + (dt.session_minutes || 0),
+      );
+    });
+
+    const getRemainingToSchedule = (task: any) => {
+      const scheduled = scheduledMinutesMap.get(task.id) || 0;
+      const accounted = Math.max(task.progress_minutes || 0, scheduled);
+      return Math.max(0, task.estimated_minutes - accounted);
+    };
+
     let taskIndex = 0;
-    let minutesLeftInCurrentTask =
-      tasks[0].estimated_minutes - (tasks[0].progress_minutes || 0);
+    let minutesLeftInCurrentTask = getRemainingToSchedule(tasks[0]);
 
     const inserted: any[] = [];
 
@@ -157,13 +180,11 @@ export class DailyTaskService {
       let minutesLeftForDay = dailyMinutes;
 
       while (minutesLeftForDay > 0 && taskIndex < tasks.length) {
-        // Skip tasks that somehow have no remaining minutes
+        // Skip tasks that have no remaining unscheduled minutes
         if (minutesLeftInCurrentTask <= 0) {
           taskIndex++;
           if (taskIndex >= tasks.length) break;
-          minutesLeftInCurrentTask =
-            tasks[taskIndex].estimated_minutes -
-            (tasks[taskIndex].progress_minutes || 0);
+          minutesLeftInCurrentTask = getRemainingToSchedule(tasks[taskIndex]);
           continue;
         }
 
@@ -190,12 +211,20 @@ export class DailyTaskService {
         minutesLeftForDay -= sessionMinutes;
         minutesLeftInCurrentTask -= sessionMinutes;
 
+        // Track newly scheduled minutes in map
+        const currentScheduled =
+          scheduledMinutesMap.get(tasks[taskIndex].id) || 0;
+        scheduledMinutesMap.set(
+          tasks[taskIndex].id,
+          currentScheduled + sessionMinutes,
+        );
+
         if (minutesLeftInCurrentTask <= 0) {
           taskIndex++;
           if (taskIndex < tasks.length) {
-            minutesLeftInCurrentTask =
-              tasks[taskIndex].estimated_minutes -
-              (tasks[taskIndex].progress_minutes || 0);
+            minutesLeftInCurrentTask = getRemainingToSchedule(
+              tasks[taskIndex],
+            );
           }
         }
       }
@@ -343,14 +372,18 @@ export class DailyTaskService {
 
     const { data: roadmapTask } = await supabase
       .from("tasks")
-      .select("id, progress_minutes, estimated_minutes")
+      .select("id, progress_minutes, estimated_minutes, roadmap_id")
       .eq("id", dailyTask.roadmap_task_id)
       .single();
 
     if (!roadmapTask) throw new Error("Roadmap task not found");
 
-    const newProgress =
+    const calculatedProgress =
       (roadmapTask.progress_minutes || 0) + dailyTask.session_minutes;
+    const newProgress = Math.min(
+      calculatedProgress,
+      roadmapTask.estimated_minutes || 0,
+    );
 
     const { error: taskUpdateError } = await supabase
       .from("tasks")
@@ -358,6 +391,35 @@ export class DailyTaskService {
       .eq("id", roadmapTask.id);
 
     if (taskUpdateError) throw taskUpdateError;
+
+    // If task has reached estimated minutes, clean up any redundant future uncompleted daily tasks for this task
+    if (newProgress >= (roadmapTask.estimated_minutes || 0)) {
+      const todayStr = new Date().toISOString().split("T")[0];
+      await supabase
+        .from("daily_tasks")
+        .delete()
+        .eq("user_id", userId)
+        .eq("roadmap_task_id", roadmapTask.id)
+        .eq("completed", false)
+        .gte("scheduled_for", todayStr);
+    }
+
+    // =========================================================
+    // SYNC USER GOAL PROGRESS AND LEVEL
+    // =========================================================
+    try {
+      const { data: roadmap } = await supabase
+        .from("roadmaps")
+        .select("goal_id")
+        .eq("id", roadmapTask.roadmap_id)
+        .single();
+
+      if (roadmap?.goal_id) {
+        await this.syncGoalProgress(roadmap.goal_id);
+      }
+    } catch (err) {
+      console.error("Error syncing goal progress:", err);
+    }
 
     // =========================================================
     // ACCOUNTABILITY ENGINE + ACTIVITY LOG in parallel
@@ -374,6 +436,15 @@ export class DailyTaskService {
     // =========================================================
 
     await this.ensureWeeklyPlan(userId);
+
+    // =========================================================
+    // SYNC ZONE STATUS
+    // =========================================================
+    try {
+      await zoneStatusService.syncZoneStatus(userId);
+    } catch (err) {
+      console.error("Error syncing zone status in task completion:", err);
+    }
 
     return { success: true };
   }
@@ -460,6 +531,106 @@ export class DailyTaskService {
 
     if (error) throw error;
     return (data as number) ?? 0;
+  }
+
+  // =========================================================
+  // SYNC USER GOAL PROGRESS AND LEVEL
+  // =========================================================
+
+  async syncGoalProgress(goalId: string) {
+    // 1. Get roadmap
+    const { data: roadmap, error: roadmapError } = await supabase
+      .from("roadmaps")
+      .select("id")
+      .eq("goal_id", goalId)
+      .single();
+
+    if (roadmapError || !roadmap) return;
+
+    // 2. Get all tasks for this roadmap
+    const { data: tasks, error: tasksError } = await supabase
+      .from("tasks")
+      .select("estimated_minutes, progress_minutes")
+      .eq("roadmap_id", roadmap.id);
+
+    if (tasksError || !tasks) return;
+
+    // 3. Calculate progress
+    const totalMinutes = tasks.reduce((sum, t) => sum + (t.estimated_minutes || 0), 0);
+    const completedMinutes = tasks.reduce((sum, t) => {
+      return sum + Math.min(t.progress_minutes || 0, t.estimated_minutes || 0);
+    }, 0);
+    const progressPercentage = totalMinutes > 0 ? Math.round((completedMinutes / totalMinutes) * 100) : 0;
+
+    // 4. Get current goal level
+    const { data: goal, error: goalError } = await supabase
+      .from("user_goals")
+      .select("current_level")
+      .eq("id", goalId)
+      .single();
+
+    if (goalError || !goal) return;
+
+    // 5. Determine level transition
+    const currentLevel = (goal.current_level || "beginner").toLowerCase();
+    let newLevel = currentLevel;
+
+    if (currentLevel === "beginner") {
+      if (progressPercentage >= 75) {
+        newLevel = "advanced";
+      } else if (progressPercentage >= 35) {
+        newLevel = "intermediate";
+      }
+    } else if (currentLevel === "intermediate") {
+      if (progressPercentage >= 75) {
+        newLevel = "advanced";
+      }
+    }
+
+    // 6. Update user_goals
+    await supabase
+      .from("user_goals")
+      .update({
+        progress_percentage: progressPercentage,
+        current_level: newLevel,
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", goalId);
+  }
+
+  // =========================================================
+  // GET DAILY TASK HISTORY (All tasks up to today)
+  // =========================================================
+
+  async getDailyTaskHistory(userId: string) {
+    const { data: profile } = await supabase
+      .from("profiles")
+      .select("timezone")
+      .eq("id", userId)
+      .single();
+
+    const tz = profile?.timezone ?? "Asia/Kolkata";
+
+    const todayStr = new Intl.DateTimeFormat("en-CA", { timeZone: tz }).format(
+      new Date(),
+    );
+
+    const { data: tasks, error } = await supabase
+      .from("daily_tasks")
+      .select("*")
+      .eq("user_id", userId)
+      .lte("scheduled_for", todayStr)
+      .order("scheduled_for", { ascending: false });
+
+    if (error) throw error;
+
+    return (tasks || []).map((task) => ({
+      id: task.id,
+      title: task.title,
+      estimatedMinutes: task.session_minutes,
+      completed: task.completed,
+      scheduledFor: task.scheduled_for,
+    }));
   }
 }
 

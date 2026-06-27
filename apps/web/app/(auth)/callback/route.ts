@@ -5,6 +5,7 @@ export async function GET(request: Request) {
   const { searchParams, origin } = new URL(request.url);
 
   const code = searchParams.get("code");
+  const next = searchParams.get("next");
 
   if (code) {
     const supabase = await createClient();
@@ -16,6 +17,11 @@ export async function GET(request: Request) {
     } = await supabase.auth.getUser();
 
     if (user) {
+      // Validate that 'next' is a safe relative URL path to prevent open redirects
+      if (next && next.startsWith("/") && !next.startsWith("//")) {
+        return NextResponse.redirect(`${origin}${next}`);
+      }
+
       const { data: profile } = await supabase
         .from("profiles")
         .select("onboarding_completed")

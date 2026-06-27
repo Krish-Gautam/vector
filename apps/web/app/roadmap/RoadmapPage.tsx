@@ -111,7 +111,11 @@ export default function RoadmapPage({
     if (phase.tasks.length === 0) return 0;
     const totalMinutes = calculateTotalMinutes(phase.tasks);
     if (totalMinutes === 0) return 0;
+    
     const completedMinutes = calculateCompletedMinutes(phase.tasks);
+    phase.tasks.forEach(task => {
+
+});
     return Math.round((completedMinutes / totalMinutes) * 100);
   };
 

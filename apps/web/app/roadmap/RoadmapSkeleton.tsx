@@ -53,7 +53,7 @@ export default function RoadmapSkeleton() {
 
       <div className="grid grid-cols-1 xl:grid-cols-[minmax(0,1fr)_320px] gap-6 items-start">
         <div className="space-y-4">
-          {Array.from({ length: 3 }).map((_, index) => (
+          {Array.from({ length: 1 }).map((_, index) => (
             <div
               key={index}
               className="rounded-2xl border border-zinc-800/60 bg-[#0b0c10]/40 p-5 md:p-6 backdrop-blur-md space-y-4"

@@ -12,8 +12,8 @@ export const completeDailyTask =
       const userId = req.authUser!.id;
 
       const taskId = Array.isArray(req.params.id)
-  ? req.params.id[0]
-  : req.params.id;
+        ? req.params.id[0]
+        : req.params.id;
 
       const result =
         await dailyTaskService.completeDailyTask(
@@ -105,6 +105,31 @@ export const generateNextWeeklyPlan =
           error instanceof Error
             ? error.message
             : "Failed to generate next weekly plan",
+      });
+    }
+  };
+
+export const getDailyTaskHistory =
+  async (
+    req: AuthRequest,
+    res: Response,
+  ) => {
+    try {
+      const userId = req.authUser!.id;
+
+      const result =
+        await dailyTaskService.getDailyTaskHistory(userId);
+
+      res.json({
+        success: true,
+        data: result,
+      });
+    } catch (error) {
+      console.error(error);
+
+      res.status(500).json({
+        error:
+          "Failed to retrieve daily task history",
       });
     }
   };

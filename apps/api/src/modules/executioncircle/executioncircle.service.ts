@@ -27,6 +27,10 @@ function computeHealthStatus(score: number): CircleHealthStatus {
   if (score >= 25) return "cooling";
   return "dormant";
 }
+type MemberStreak = {
+  user_id: string;
+  streak_days: number;
+};
 
 function computeCircleName(goal: string, level: string, index: number): string {
   const levelLabel =
@@ -76,11 +80,17 @@ export class ExecutionCircleService {
 
     if (!circleName) {
       try {
-        const details = await OpenAIService.determineCircleDetails(goal, currentLevel);
+        const details = await OpenAIService.determineCircleDetails(
+          goal,
+          currentLevel,
+        );
         refinedGoal = details.refined_goal_title;
         circleName = details.circle_name;
       } catch (error) {
-        console.error("Failed to determine circle details via AI, falling back:", error);
+        console.error(
+          "Failed to determine circle details via AI, falling back:",
+          error,
+        );
         refinedGoal = goal;
       }
     }
@@ -113,11 +123,16 @@ export class ExecutionCircleService {
         .select()
         .single();
 
-      return { circle: (updatedCircle ?? availableCircle) as ExecutionCircle, is_new: false };
+      return {
+        circle: (updatedCircle ?? availableCircle) as ExecutionCircle,
+        is_new: false,
+      };
     }
 
     const existingCount = (matchingCircles ?? []).length;
-    const finalCircleName = circleName || computeCircleName(refinedGoal, currentLevel, existingCount + 1);
+    const finalCircleName =
+      circleName ||
+      computeCircleName(refinedGoal, currentLevel, existingCount + 1);
 
     const { data: newCircle, error } = await this.supabase
       .from("execution_circles")
@@ -150,7 +165,10 @@ export class ExecutionCircleService {
       .select()
       .single();
 
-    return { circle: (updatedCircle ?? newCircle) as ExecutionCircle, is_new: true };
+    return {
+      circle: (updatedCircle ?? newCircle) as ExecutionCircle,
+      is_new: true,
+    };
   }
 
   // ── Member management ───────────────────────────────────
@@ -243,10 +261,8 @@ export class ExecutionCircleService {
   ): Promise<CircleDetail> {
     const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
     const sevenDaysAgoISO = sevenDaysAgo.toISOString();
-    
 
-    // Parallel fetch — added a separate weekly posts count query
-    const [circleRes, membersRes, postsRes, challengeRes, weeklyPostsRes] =
+    const [circleRes, members, recentPosts, activeChallenge, weeklyPostsRes] =
       await Promise.all([
         this.supabase
           .from("execution_circles")
@@ -254,13 +270,12 @@ export class ExecutionCircleService {
           .eq("id", circleId)
           .single(),
 
-        this.getCircleMembers(circleId),
+        this.getCircleMembersWithStreaks(circleId),
 
         this.getCirclePosts(circleId, requestingUserId, 10),
 
         this.getActiveChallenge(circleId, requestingUserId),
 
-        // Accurate weekly post count — independent of the 10-post preview
         this.supabase
           .from("circle_posts")
           .select("id", { count: "exact", head: true })
@@ -273,53 +288,42 @@ export class ExecutionCircleService {
     }
 
     const circle = circleRes.data as ExecutionCircle;
-    const members = membersRes;
-    const recentPosts = postsRes;
-    const activeChallenge = challengeRes;
     const weeklyPosts = weeklyPostsRes.count ?? 0;
 
-    // Compute member-level stats in a single pass
     let activeMemberCount = 0;
     let totalStreakDays = 0;
 
-    for (const m of members) {
-      if (m.last_active_at && new Date(m.last_active_at) >= sevenDaysAgo) {
+    for (const member of members) {
+      if (
+        member.last_active_at &&
+        new Date(member.last_active_at) >= sevenDaysAgo
+      ) {
         activeMemberCount++;
       }
-      totalStreakDays += m.streak_days ?? 0;
+
+      totalStreakDays += member.streak_days ?? 0;
     }
 
     const totalMembers = members.length;
+
     const avgStreak =
       totalMembers > 0 ? Math.round(totalStreakDays / totalMembers) : 0;
 
-    // Health score — objective, circle-level only (removed personal challengeBonus)
-    //
-    // Component breakdown (max 100):
-    //   Participation  = (activeMembers / totalMembers) * 100, weighted 40%  → max 40
-    //   Post rate      = (weeklyPosts / totalMembers) per-person, capped at 2 posts/person → max 30
-    //   Streak bonus   = avgStreak capped at 15 days, scaled to 30            → max 30
     const participationScore =
       totalMembers > 0 ? (activeMemberCount / totalMembers) * 40 : 0;
 
     const postRateScore =
-      totalMembers > 0
-        ? Math.min(weeklyPosts / totalMembers / 2, 1) * 30 // 2 posts/member = full score
-        : 0;
+      totalMembers > 0 ? Math.min(weeklyPosts / totalMembers / 2, 1) * 30 : 0;
 
-    const streakScore = Math.min(avgStreak / 15, 1) * 30; // 15-day avg streak = full score
+    const streakScore = Math.min(avgStreak / 15, 1) * 30;
 
     const healthScore = Math.round(
       Math.min(participationScore + postRateScore + streakScore, 100),
     );
 
-    // Top 3 performers by total points
     const topPerformers = [...members]
       .sort((a, b) => b.total_points - a.total_points)
       .slice(0, 3);
-
-    // Personal challenge status — separate from circle health
-    const completedChallengeByMe = activeChallenge?.completed_by_me ?? false;
 
     return {
       ...circle,
@@ -327,12 +331,11 @@ export class ExecutionCircleService {
       recent_posts: recentPosts,
       active_challenge: activeChallenge,
       health_score: healthScore,
-      completed_challenge_by_me: completedChallengeByMe,
+      completed_challenge_by_me: activeChallenge?.completed_by_me ?? false,
       weekly_activity_count: weeklyPosts,
       top_performers: topPerformers,
     };
   }
-
   // ── Members ──────────────────────────────────────────────
 
   private async getCircleMembers(
@@ -343,7 +346,7 @@ export class ExecutionCircleService {
       .select(
         `
       id, user_id, circle_id, role,
-      total_points, streak_days, last_active_at, joined_at,
+      total_points, last_active_at, joined_at,
       profile:profiles ( id, full_name, avatar_url, username )
     `,
       )
@@ -389,19 +392,42 @@ export class ExecutionCircleService {
     }) as CircleMemberWithProfile[];
   }
 
+  private async getCircleMembersWithStreaks(
+    circleId: string,
+  ): Promise<CircleMemberWithProfile[]> {
+    const [members, streaksRes] = await Promise.all([
+      this.getCircleMembers(circleId),
+      this.supabase.rpc("get_circle_member_streaks", {
+        p_circle_id: circleId,
+      }),
+    ]);
+
+    if (streaksRes.error) throw streaksRes.error;
+
+    const streaks = (streaksRes.data ?? []) as MemberStreak[];
+
+    const streakMap = new Map<string, number>(
+      streaks.map((s) => [s.user_id, s.streak_days]),
+    );
+
+    return members.map((member) => ({
+      ...member,
+      streak_days: streakMap.get(member.user_id) ?? 0,
+    }));
+  }
+
   async getLeaderboard(circleId: string) {
-    const members = await this.getCircleMembers(circleId);
-    console.log(members[0])
+    const members = await this.getCircleMembersWithStreaks(circleId);
+
     return members
       .sort((a, b) => b.total_points - a.total_points)
       .map((member, idx) => ({
         rank: idx + 1,
         member,
         points: member.total_points,
-        streak_days: member.accountability_score ?? 0,
+        streak_days: member.streak_days,
       }));
   }
-
   // ── Posts ────────────────────────────────────────────────
 
   private async getCirclePosts(
