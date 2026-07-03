@@ -12,7 +12,7 @@ export function createExecutionCircleRouter(supabase: SupabaseClient): Router {
   router.use(verifyUser);
 
   // ── POST routes ───────────────────────────────────────────
-  router.post('/create', controller.createOrJoin);
+  // router.post('/create', controller.createOrJoin);
   router.post('/join/:circleId', controller.joinCircle);
   router.post('/post', controller.createPost);
   router.post('/comment', controller.createComment);
@@ -28,6 +28,7 @@ export function createExecutionCircleRouter(supabase: SupabaseClient): Router {
   // ── GET dynamic ──────────────────────────────────────────
   router.get('/:circleId', controller.getCircle);
   router.get('/:circleId/leaderboard', controller.getLeaderboard);
+  router.get('/:circleId/health', controller.getHealth);
   router.get('/:circleId/insights', controller.getInsights);
   router.get('/:circleId/activity', controller.getActivity);   // NEW
 

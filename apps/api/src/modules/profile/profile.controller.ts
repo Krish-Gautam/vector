@@ -64,4 +64,29 @@ export class ProfileController {
       });
     }
   }
+  static async getRoadmapStatus(
+  req: AuthRequest,
+  res: Response
+) {
+  try {
+    const userId = req.user?.id;
+
+    if (!userId) {
+      return res.status(401).json({
+        error: "Unauthorized",
+      });
+    }
+
+    const result =
+      await ProfileService.getRoadmapStatus(userId);
+
+    return res.json(result);
+  } catch (error: any) {
+    console.error(error);
+
+    return res.status(500).json({
+      error: error.message,
+    });
+  }
+}
 }

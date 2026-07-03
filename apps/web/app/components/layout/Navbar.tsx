@@ -29,7 +29,7 @@ const dropdownItems = [
 
 export default function Navbar() {
   const [open, setOpen] = useState(false);
-  const { user, loading, signOut } = useAuth();
+  const { user, profile, loading, signOut } = useAuth();
   const dropdownRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -47,8 +47,7 @@ export default function Navbar() {
   }, []);
 
   const userEmail = user?.email ?? null;
-  const userName =
-    (user?.user_metadata?.username as string | undefined) ?? null;
+  const userName = profile?.username ?? null;
 
   const handleLogout = async () => {
     await signOut();
@@ -180,7 +179,7 @@ export default function Navbar() {
               <div className="border-t border-white/10 p-2">
                 <button
                   onClick={handleLogout}
-                  className="flex w-full items-center gap-3 rounded-xl px-4 py-3 text-red-500 transition hover:bg-red-500/10"
+                  className="flex cursor-pointer w-full items-center gap-3 rounded-xl px-4 py-3 text-red-500 transition hover:bg-red-500/10"
                 >
                   <LogOut size={18} />
                   <span className="text-sm font-medium">Logout</span>

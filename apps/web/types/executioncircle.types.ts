@@ -1,7 +1,7 @@
 export type CircleLevel = 'beginner' | 'intermediate' | 'advanced';
 export type MemberRole = 'member' | 'lead';
 export type PostType = 'update' | 'win' | 'challenge' | 'question';
-export type ActivityType = 'post_created' | 'member_joined' | 'proof_uploaded' | 'task_completed' | 'streak_milestone';
+export type ActivityType = 'post_created' | 'member_joined' | 'proof_uploaded' | 'task_completed' | 'streak_milestone' | 'comment_created' | 'like_added' | 'challenge_completed';
 
 // ── Database row shapes ────────────────────────────────────
 
@@ -221,7 +221,6 @@ export interface CircleHealthData {
   status: CircleHealthStatus;
   weekly_posts: number;
   active_members: number;
-  avg_streak: number;
 }
 
 export type CreateCircleInput = CreateCircleRequest;
@@ -231,6 +230,5 @@ export type CreateCommentInput = CreateCommentRequest;
 export interface CircleInsights {
   avg_score: number;
   better_than: number;
-  avg_streak: number;
   avg_completion: number;
 }

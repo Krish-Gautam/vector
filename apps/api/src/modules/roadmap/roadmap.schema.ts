@@ -9,8 +9,6 @@ export const roadmapSchema = z.object({
 
       description: z.string().trim().min(1),
 
-      duration_weeks: z.number().int().positive(),
-
       tasks: z.array(
         z.object({
           title: z.string().trim().min(1),

@@ -5,7 +5,11 @@ export class DailyTaskService {
   // =========================================================
   // PRIVATE HELPER: Get roadmap id for user
   // =========================================================
-
+  private getLocalDateString(date: Date) {
+    return new Intl.DateTimeFormat("en-CA", {
+      timeZone: "Asia/Kolkata",
+    }).format(date);
+  }
   private async getRoadmapId(userId: string): Promise<string> {
     const { data: goal } = await supabase
       .from("user_goals")
@@ -124,7 +128,7 @@ export class DailyTaskService {
     for (let i = dayOffset; i < dayOffset + numberOfDays; i++) {
       const targetDate = new Date(baseDate);
       targetDate.setDate(baseDate.getDate() + i);
-      datesToFill.push(targetDate.toISOString().split("T")[0]);
+      datesToFill.push(this.getLocalDateString(targetDate));
     }
 
     // Check which dates already have daily_tasks in one query
@@ -222,9 +226,7 @@ export class DailyTaskService {
         if (minutesLeftInCurrentTask <= 0) {
           taskIndex++;
           if (taskIndex < tasks.length) {
-            minutesLeftInCurrentTask = getRemainingToSchedule(
-              tasks[taskIndex],
-            );
+            minutesLeftInCurrentTask = getRemainingToSchedule(tasks[taskIndex]);
           }
         }
       }
@@ -244,7 +246,7 @@ export class DailyTaskService {
     const today = new Date();
     today.setHours(0, 0, 0, 0);
 
-    const todayStr = targetDateStr || today.toISOString().split("T")[0];
+    const todayStr = targetDateStr || this.getLocalDateString(today);
 
     const { data: existingTasks } = await supabase
       .from("daily_tasks")
@@ -256,7 +258,9 @@ export class DailyTaskService {
       return existingTasks;
     }
 
-    const targetDate = new Date(todayStr);
+    const [year, month, day] = todayStr.split("-").map(Number);
+
+    const targetDate = new Date(year, month - 1, day);
     targetDate.setHours(0, 0, 0, 0);
     const dayOffset = Math.round(
       (targetDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24),
@@ -288,8 +292,8 @@ export class DailyTaskService {
     const weekEnd = new Date(today);
     weekEnd.setDate(today.getDate() + 6);
 
-    const todayStr = today.toISOString().split("T")[0];
-    const weekEndStr = weekEnd.toISOString().split("T")[0];
+    const todayStr = this.getLocalDateString(today);
+    const weekEndStr = this.getLocalDateString(weekEnd);
 
     const { data: completedThisWeek } = await supabase
       .from("daily_tasks")
@@ -310,8 +314,8 @@ export class DailyTaskService {
     const nextWeekEnd = new Date(today);
     nextWeekEnd.setDate(today.getDate() + 13);
 
-    const nextWeekStartStr = nextWeekStart.toISOString().split("T")[0];
-    const nextWeekEndStr = nextWeekEnd.toISOString().split("T")[0];
+    const nextWeekStartStr = this.getLocalDateString(nextWeekStart);
+    const nextWeekEndStr = this.getLocalDateString(nextWeekEnd);
 
     const { data: existingNextWeek } = await supabase
       .from("daily_tasks")
@@ -394,7 +398,7 @@ export class DailyTaskService {
 
     // If task has reached estimated minutes, clean up any redundant future uncompleted daily tasks for this task
     if (newProgress >= (roadmapTask.estimated_minutes || 0)) {
-      const todayStr = new Date().toISOString().split("T")[0];
+      const todayStr = this.getLocalDateString(new Date());
       await supabase
         .from("daily_tasks")
         .delete()
@@ -511,8 +515,8 @@ export class DailyTaskService {
       .from("daily_tasks")
       .select("*")
       .eq("user_id", userId)
-      .gte("scheduled_for", today.toISOString().split("T")[0])
-      .lte("scheduled_for", weekEnd.toISOString().split("T")[0])
+      .gte("scheduled_for", this.getLocalDateString(today))
+      .lte("scheduled_for", this.getLocalDateString(weekEnd))
       .order("scheduled_for", { ascending: true });
 
     return tasks || [];
@@ -556,11 +560,17 @@ export class DailyTaskService {
     if (tasksError || !tasks) return;
 
     // 3. Calculate progress
-    const totalMinutes = tasks.reduce((sum, t) => sum + (t.estimated_minutes || 0), 0);
+    const totalMinutes = tasks.reduce(
+      (sum, t) => sum + (t.estimated_minutes || 0),
+      0,
+    );
     const completedMinutes = tasks.reduce((sum, t) => {
       return sum + Math.min(t.progress_minutes || 0, t.estimated_minutes || 0);
     }, 0);
-    const progressPercentage = totalMinutes > 0 ? Math.round((completedMinutes / totalMinutes) * 100) : 0;
+    const progressPercentage =
+      totalMinutes > 0
+        ? Math.round((completedMinutes / totalMinutes) * 100)
+        : 0;
 
     // 4. Get current goal level
     const { data: goal, error: goalError } = await supabase

@@ -8,13 +8,11 @@ export class DashboardService {
     // ENSURE WEEKLY PLAN EXISTS
     // =========================================================
     await dailyTaskService.ensureWeeklyPlan(userId);
-    function todayInTz(tz: string) {
-      return new Intl.DateTimeFormat("en-CA", { timeZone: tz }).format(
-        new Date(),
-      );
-      // en-CA gives YYYY-MM-DD
+    function dateInTz(date: Date, tz: string) {
+      return new Intl.DateTimeFormat("en-CA", {
+        timeZone: tz,
+      }).format(date);
     }
-
 
     // =========================================================
     // PROFILE + GOAL (goal needed for roadmap lookup)
@@ -50,11 +48,14 @@ export class DashboardService {
 
     const today = new Date();
     today.setHours(0, 0, 0, 0);
-    const todayStr = todayInTz(profile.timezone ?? "Asia/Kolkata");
+    const tz = profile?.timezone ?? "Asia/Kolkata";
+    const todayStr = dateInTz(today, tz);
 
     const weekEnd = new Date(today);
     weekEnd.setDate(today.getDate() + 6);
-    const weekEndStr = weekEnd.toISOString().split("T")[0];
+    const weekEndStr = new Intl.DateTimeFormat("en-CA", {
+      timeZone: tz,
+    }).format(weekEnd);
 
     // Roadmap depends on goal.id so fetched after
     const { data: roadmap } = await supabase
@@ -251,19 +252,19 @@ export class DashboardService {
       // Current active task with percent complete — new addition
       activeTask: activeTask
         ? {
-          id: activeTask.id,
-          title: activeTask.title,
-          estimatedMinutes: activeTask.estimated_minutes,
-          progressMinutes: activeTask.progress_minutes,
-          percentComplete:
-            activeTask.estimated_minutes > 0
-              ? Math.round(
-                (activeTask.progress_minutes /
-                  activeTask.estimated_minutes) *
-                100,
-              )
-              : 0,
-        }
+            id: activeTask.id,
+            title: activeTask.title,
+            estimatedMinutes: activeTask.estimated_minutes,
+            progressMinutes: activeTask.progress_minutes,
+            percentComplete:
+              activeTask.estimated_minutes > 0
+                ? Math.round(
+                    (activeTask.progress_minutes /
+                      activeTask.estimated_minutes) *
+                      100,
+                  )
+                : 0,
+          }
         : null,
 
       streak: {

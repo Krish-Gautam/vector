@@ -14,19 +14,33 @@ import {
 } from '@/types/executioncircle.types';
 
 import { supabase } from '../lib/supabase';
+import { getAuthAccessToken } from '../lib/auth-session';
 
 const BASE = `${process.env.NEXT_PUBLIC_API_BASE_URL}/api/execution-circle`;
 
 async function apiFetch<T>(path: string, options?: RequestInit): Promise<T> {
-  const {
-    data: { session },
-  } = await supabase.auth.getSession();
+  const accessToken = getAuthAccessToken();
+  const authHeaders: Record<string, string> = {};
+
+  if (accessToken) {
+    authHeaders.Authorization = `Bearer ${accessToken}`;
+  }
+
+  if (!accessToken) {
+    const {
+      data: { session },
+    } = await supabase.auth.getSession();
+
+    if (session?.access_token) {
+      authHeaders.Authorization = `Bearer ${session.access_token}`;
+    }
+  }
 
   const res = await fetch(`${BASE}${path}`, {
     ...options,
     headers: {
       'Content-Type': 'application/json',
-      Authorization: `Bearer ${session?.access_token}`,
+      ...authHeaders,
       ...(options?.headers || {}),
     },
   });

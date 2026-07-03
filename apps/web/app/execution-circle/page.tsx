@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useEffect, useCallback, useRef } from "react";
+import { useAuth } from "../providers/AuthProvider";
 import {
   CircleDetail,
   CirclePostWithAuthor,
@@ -131,8 +132,30 @@ function Avatar({
   );
 }
 
+function isCurrentUserMember(
+  member: CircleDetail["members"][number],
+  currentUserId?: string | null,
+) {
+  return (
+    !!currentUserId &&
+    (member.user_id === currentUserId || member.profile?.id === currentUserId)
+  );
+}
+
 // ── Activity label helper ──────────────────────────────────
-function activityLabel(type: string): string {
+function activityLabel(type: string, metadata?: Record<string, any> | null): string {
+  if (metadata?.action === "comment_created") {
+    return "commented";
+  }
+
+  if (metadata?.action === "like_added") {
+    return "liked a post";
+  }
+
+  if (metadata?.action === "challenge_completed") {
+    return "completed a challenge";
+  }
+
   switch (type) {
     case "post_created":
       return "shared an update";
@@ -144,6 +167,12 @@ function activityLabel(type: string): string {
       return "completed a task";
     case "streak_milestone":
       return "hit a streak milestone";
+    case "comment_created":
+      return "commented";
+    case "like_added":
+      return "liked a post";
+    case "challenge_completed":
+      return "completed a challenge";
     default:
       return "was active";
   }
@@ -413,7 +442,13 @@ function MobileCircleHero({
 }
 
 // ── Mobile Accountability ────────────────────────────────────
-function MobileAccountabilityRow({ circle }: { circle: CircleDetail }) {
+function MobileAccountabilityRow({
+  circle,
+  currentUserId,
+}: {
+  circle: CircleDetail;
+  currentUserId?: string | null;
+}) {
   return (
     <div>
       <div className="flex justify-between items-center mb-3">
@@ -423,33 +458,37 @@ function MobileAccountabilityRow({ circle }: { circle: CircleDetail }) {
         <p className={`${COLORS.textMuted} text-[10px]`}>Refreshes in 6d</p>
       </div>
       <div className="flex overflow-x-auto gap-4 pb-1 no-scrollbar -mx-1 px-1">
-        {circle.members.map((member, idx) => (
-          <div
-            key={member.id}
-            className="flex flex-col items-center gap-2 min-w-[72px] shrink-0"
-          >
-            <div className="relative">
-              <Avatar
-                url={member.profile?.avatar_url}
-                name={member.profile?.full_name}
-                size={20}
-              />
-              {idx === 0 && (
-                <div className="absolute -bottom-1 -right-1 bg-white text-black text-[9px] font-bold px-1 py-0.5 rounded-full">
-                  YOU
-                </div>
-              )}
+        {circle.members.map((member) => {
+          const isCurrentUser = isCurrentUserMember(member, currentUserId);
+
+          return (
+            <div
+              key={member.id}
+              className="flex flex-col items-center gap-2 min-w-[72px] shrink-0"
+            >
+              <div className="relative">
+                <Avatar
+                  url={member.profile?.avatar_url}
+                  name={member.profile?.full_name}
+                  size={20}
+                />
+                {isCurrentUser && (
+                  <div className="absolute -bottom-1 -right-1 bg-white text-black text-[9px] font-bold px-1 py-0.5 rounded-full">
+                    YOU
+                  </div>
+                )}
+              </div>
+              <div className="text-center w-[72px]">
+                <p className={`${COLORS.text} text-xs font-medium truncate`}>
+                  {member.profile?.full_name || "Unknown"}
+                </p>
+                <p className={`${COLORS.textMuted} text-[10px]`}>
+                  {member.weekly_completion || 0}%
+                </p>
+              </div>
             </div>
-            <div className="text-center w-[72px]">
-              <p className={`${COLORS.text} text-xs font-medium truncate`}>
-                {member.profile?.full_name || "Unknown"}
-              </p>
-              <p className={`${COLORS.textMuted} text-[10px]`}>
-                {member.weekly_completion || 0}%
-              </p>
-            </div>
-          </div>
-        ))}
+          );
+        })}
         <button
           type="button"
           className="h-20 w-20 min-h-[44px] min-w-[44px] rounded-full border-2 border-dashed border-zinc-800 flex items-center justify-center text-zinc-500 hover:border-zinc-500 hover:text-white transition-all shrink-0"
@@ -584,14 +623,6 @@ function MobileInsights({ insights }: { insights: CircleInsights | null }) {
                 {insights.avg_score}
               </span>
             </div>
-            <div className="rounded-lg bg-zinc-950/40 border border-zinc-900 px-3 py-2 flex justify-between items-center min-h-[44px]">
-              <span className={`${COLORS.textMuted} text-[11px]`}>
-                Avg Streak
-              </span>
-              <span className={`${COLORS.text} text-sm font-bold font-mono`}>
-                {insights.avg_streak}d
-              </span>
-            </div>
           </div>
         </div>
       ) : (
@@ -672,7 +703,7 @@ function MobileRecentActivity({
                       {act.profile?.full_name || "Someone"}
                     </span>
                     <span className={`${COLORS.textMuted} text-xs ml-1`}>
-                      {activityLabel(act.activity_type)}
+                      {activityLabel(act.activity_type, act.metadata)}
                     </span>
                   </div>
                   <span className="text-[10px] text-zinc-600 font-mono shrink-0">
@@ -808,7 +839,13 @@ function CircleHero({
 }
 
 // ── Accountability Row ─────────────────────────────────────
-function AccountabilityRow({ circle }: { circle: CircleDetail }) {
+function AccountabilityRow({
+  circle,
+  currentUserId,
+}: {
+  circle: CircleDetail;
+  currentUserId?: string | null;
+}) {
   return (
     <div className="mb-8">
       <div className="flex justify-between items-center mb-6">
@@ -820,33 +857,29 @@ function AccountabilityRow({ circle }: { circle: CircleDetail }) {
         </p>
       </div>
       <div className="flex overflow-x-auto gap-6 pb-4 no-scrollbar">
-        {circle.members.map((member, idx) => (
-          <div
-            key={member.id}
-            className="flex flex-col items-center gap-3 min-w-[80px]"
-          >
-            <div className="relative">
-              <Avatar
-                url={member.profile?.avatar_url}
-                name={member.profile?.full_name}
-                size={20}
-              />
-              {idx === 0 && (
-                <div className="absolute -bottom-1 -right-1 bg-white text-black text-[9px] font-bold px-1.5 py-0.5 rounded-full shadow-md font-mono">
-                  YOU
-                </div>
-              )}
+        {circle.members.map((member) => {
+          const isCurrentUser = isCurrentUserMember(member, currentUserId);
+
+          return (
+            <div
+              key={member.id}
+              className="flex flex-col items-center gap-3 min-w-[80px]"
+            >
+              <div className="relative">
+                <Avatar
+                  url={member.profile?.avatar_url}
+                  name={member.profile?.full_name}
+                  size={20}
+                />
+                {isCurrentUser && (
+                  <div className="absolute -bottom-1 -right-1 bg-white text-black text-[9px] font-bold px-1.5 py-0.5 rounded-full shadow-md font-mono">
+                    YOU
+                  </div>
+                )}
+              </div>
             </div>
-            <div className="text-center">
-              <p className="text-white text-sm font-semibold truncate w-20">
-                {member.profile?.full_name || "Unknown"}
-              </p>
-              <p className="text-zinc-500 text-[11px] mt-0.5">
-                {member.weekly_completion || 0}% completion
-              </p>
-            </div>
-          </div>
-        ))}
+          );
+        })}
         <button
           className="h-20 w-20 rounded-full border-2 border-dashed border-zinc-800 flex items-center justify-center text-zinc-500 hover:border-zinc-500 hover:text-white transition-all flex-shrink-0 focus:outline-none"
           aria-label="Add member"
@@ -1190,7 +1223,7 @@ function FeedComposer({
           <button
             onClick={handlePost}
             disabled={posting || (!content.trim() && !proofUrl.trim())}
-            className="bg-white text-black hover:bg-zinc-200 transition-colors font-bold rounded-lg px-5 h-9 text-sm disabled:opacity-40 flex items-center justify-center gap-1.5 focus:outline-none"
+            className="bg-white cursor-pointer text-black hover:bg-zinc-200 transition-colors font-bold rounded-lg px-5 h-9 text-sm disabled:opacity-40 flex items-center justify-center gap-1.5 focus:outline-none"
           >
             {posting ? (
               "Posting..."
@@ -1363,10 +1396,7 @@ function CircleSidebar({
                 <span className="text-zinc-500">Avg Score</span>
                 <span className="text-zinc-200 font-mono font-semibold">{insights.avg_score}</span>
               </div>
-              <div className="flex justify-between text-xs">
-                <span className="text-zinc-500">Avg Streak</span>
-                <span className="text-zinc-200 font-mono font-semibold">{insights.avg_streak}d</span>
-              </div>
+              
               <div className="flex justify-between text-xs">
                 <span className="text-zinc-500">Task Completion</span>
                 <span className="text-zinc-200 font-mono font-semibold">{insights.avg_completion}%</span>
@@ -1463,7 +1493,7 @@ function CircleSidebar({
                     {act.profile?.full_name || "Someone"}
                   </span>
                   <span className="text-zinc-500 text-xs ml-1">
-                    {activityLabel(act.activity_type)}
+                    {activityLabel(act.activity_type, act.metadata)}
                   </span>
                 </div>
                 <span className="text-[10px] text-zinc-600 font-mono shrink-0">
@@ -1496,6 +1526,7 @@ function CircleSidebar({
 
 // ── Main Page ──────────────────────────────────────────────
 export default function ExecutionCirclePage() {
+  const { user } = useAuth();
   const [mobileOpen, setMobileOpen] = useState(false); // FIX: Mobile sidebar state
   const [circle, setCircle] = useState<CircleDetail | null>(null);
   const [feed, setFeed] = useState<CirclePostWithAuthor[]>([]);
@@ -1513,6 +1544,7 @@ export default function ExecutionCirclePage() {
       setIsLoading(true);
       setError(null);
       const circleData = await api.getMyCircle();
+      console.log("Fetched circle data:", circleData);
       setCircle(circleData);
 
       const [feedData, insightsData, activitiesData, leaderboardData] =
@@ -1525,6 +1557,7 @@ export default function ExecutionCirclePage() {
 
       setFeed(feedData.posts);
       setInsights(insightsData as CircleInsights | null);
+      console.log("Fetched insights data:", insightsData);
       setActivities(activitiesData);
       setLeaderboard(leaderboardData);
     } catch (e: any) {
@@ -1655,7 +1688,7 @@ export default function ExecutionCirclePage() {
             circle={circle}
             onHowItWorks={() => setShowHowItWorks(true)}
           />
-          <MobileAccountabilityRow circle={circle} />
+          <MobileAccountabilityRow circle={circle} currentUserId={user?.id} />
           <MobileFeedSection
             circleId={circle.id}
             feed={feed}
@@ -1679,7 +1712,7 @@ export default function ExecutionCirclePage() {
               onHowItWorks={() => setShowHowItWorks(true)}
             />
 
-            <AccountabilityRow circle={circle} />
+            <AccountabilityRow circle={circle} currentUserId={user?.id} />
 
             <PerformanceSection circle={circle} />
 

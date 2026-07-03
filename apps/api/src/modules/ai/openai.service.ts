@@ -57,6 +57,7 @@ export class OpenAIService {
     return JSON.parse(content) as {
       refined_goal_title: string;
       circle_name: string;
+      goal_category: string;
     };
   }
 
