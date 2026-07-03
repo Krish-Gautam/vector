@@ -41,11 +41,28 @@ export class RoadmapController {
 
       return res.json(result);
     } catch (error: any) {
-      console.error(error);
 
-      return res.status(500).json({
-        error: error.message,
-      });
+    if (
+        error.message === "Roadmap generation already in progress."
+    ) {
+        return res.status(409).json({
+            error: error.message,
+        });
     }
+
+    if (
+        error.message === "Roadmap already exists."
+    ) {
+        return res.status(409).json({
+            error: error.message,
+        });
+    }
+
+    console.error(error);
+
+    return res.status(500).json({
+        error: error.message,
+    });
+}
   }
 }

@@ -6,8 +6,26 @@ import { dailyTaskService } from "../dailytask/dailytask.service.js";
 
 import { supabase } from "../../data/supabase.client.js";
 import { ExecutionCircleService } from "../executioncircle/executioncircle.service.js";
-
+interface GenerateRoadmapInput {
+  goal: string;
+  currentLevel: string;
+  duration: number;
+  dailyHours: number;
+}
 export class RoadmapService {
+  static async updateRoadmapStatus(
+    userId: string,
+    status: "idle" | "generating" | "ready" | "failed",
+  ) {
+    const { error } = await supabase
+      .from("profiles")
+      .update({
+        roadmap_status: status,
+      })
+      .eq("id", userId);
+
+    if (error) throw error;
+  }
   static async getRoadmapByGoalId(goalId: string) {
     const { data, error } = await supabase
       .from("roadmaps")
@@ -78,6 +96,14 @@ export class RoadmapService {
     if (error) throw error;
 
     return phase;
+  }
+  static async deleteGoal(goalId: string) {
+    const { error } = await supabase
+      .from("user_goals")
+      .delete()
+      .eq("id", goalId);
+
+    if (error) throw error;
   }
 
   // =========================================================
@@ -167,157 +193,248 @@ export class RoadmapService {
     };
   }
 
-  static async generateRoadmap(userId: string, input: any) {
-    // 0 - REFINE GOAL TITLE AND GET PREMIUM CIRCLE NAME VIA AI
-    let refinedGoal = input.goal;
-    let aiCircleName = "";
-    try {
-      const details = await OpenAIService.determineCircleDetails(
-        input.goal,
-        input.currentLevel,
-      );
-      refinedGoal = details.refined_goal_title;
-      aiCircleName = details.circle_name;
-    } catch (e) {
-      console.error("AI goal refinement failed, using raw goal:", e);
-    }
+  static async generateRoadmap(userId: string, input: GenerateRoadmapInput) {
+    let goal: Awaited<ReturnType<typeof RoadmapService.createGoal>> | null =
+      null;
+    console.log("\n================ ROADMAP GENERATION START ================");
+    console.log("User:", userId);
+    console.log("Input:", input);
 
-    // 1 - CREATE USER GOAL
-    const goal = await RoadmapService.createGoal({
-      user_id: userId,
-      title: refinedGoal,
-      current_level: input.currentLevel,
+    const { data, error } = await supabase.rpc("lock_roadmap_generation", {
+      p_user_id: userId,
     });
 
-    // 2 - BUILD AI PROMPT
-    const prompt = await buildRoadmapPrompt(input);
+    console.log("RPC result:", data);
+    console.log("RPC error:", error);
 
-    input.goal = refinedGoal;
-    // 3 - GENERATE AI ROADMAP
-    const aiResponse = await OpenAIService.generateRoadmap(prompt);
-    if (!aiResponse) {
-      throw new Error("AI response empty");
+    if (error) {
+      console.error("RPC FAILED");
+      throw error;
     }
 
-
-    // 4 - PARSE + VALIDATE
-    const parsed = roadmapSchema.parse(JSON.parse(aiResponse));
-
-    // 5 - VALIDATE PHASE WORKLOAD
-    const totalMinutes = parsed.phases.reduce(
-      (phaseAcc, phase) =>
-        phaseAcc +
-        phase.tasks.reduce(
-          (taskAcc, task) => taskAcc + task.estimated_minutes,
-          0,
-        ),
-      0,
-    );
-
-    const expectedMinutes =
-      input.durationMonths * 30 * ((input.dailyHours ?? 2) * 60);
-
-    if (totalMinutes < expectedMinutes * 0.85) {
+    if (!data) {
+      console.error("Roadmap generation blocked by lock function");
       throw new Error(
-        `Roadmap too short. Generated ${
-          totalMinutes / 60
-        } hours but expected at least ${
-          Math.floor(expectedMinutes * 0.85) / 60
-        } hours`,
+        "Roadmap generation already in progress or roadmap already exists.",
       );
     }
-    for (const phase of parsed.phases) {
-      const totalMinutes = phase.tasks.reduce(
-        (acc, task) => acc + task.estimated_minutes,
+
+    console.log("Roadmap lock acquired successfully");
+
+    console.log("Profile status -> generating");
+    await RoadmapService.updateRoadmapStatus(userId, "generating");
+    try {
+      // 0 - REFINE GOAL + GET CATEGORY + CIRCLE NAME
+      let refinedGoal = input.goal;
+      let aiCircleName = "";
+      let goalCategory = refinedGoal;
+      console.log("\n---- STEP 1 : AI Goal Refinement ----");
+      try {
+        const details = await OpenAIService.determineCircleDetails(
+          input.goal,
+          input.currentLevel,
+        );
+
+        refinedGoal = details.refined_goal_title;
+        aiCircleName = details.circle_name;
+        goalCategory = details.goal_category ?? "General";
+      } catch (e) {
+        console.error("AI goal refinement failed:", e);
+        console.error("Goal refinement failed");
+        console.error(e);
+
+        refinedGoal = input.goal;
+        aiCircleName = "";
+        goalCategory = "General";
+      }
+      console.log("Refined Goal:", refinedGoal);
+      console.log("Circle:", aiCircleName);
+      console.log("Category:", goalCategory);
+
+      // 2 - BUILD AI PROMPT
+      console.log("\n---- STEP 2 : Building Prompt ----");
+      input.goal = refinedGoal;
+      const prompt = await buildRoadmapPrompt(input);
+      console.log("Prompt built successfully");
+
+      // 3 - GENERATE AI ROADMAP
+      console.log("\n---- STEP 3 : Calling OpenAI ----");
+      const aiResponse = await OpenAIService.generateRoadmap(prompt);
+      if (!aiResponse) {
+        throw new Error("AI response empty");
+      }
+      console.log("OpenAI response received");
+      console.log(aiResponse?.substring(0, 500) + "...");
+
+      // 4 - PARSE + VALIDATE
+      console.log("\n---- STEP 4 : Parsing JSON ----");
+
+      const raw = JSON.parse(aiResponse);
+
+      console.log(
+        raw.phases.map((p: any, i: number) => ({
+          phase: i + 1,
+          title: p.title,
+        })),
+      );
+
+      const parsed = roadmapSchema.parse(raw);
+      console.log("Roadmap parsed successfully");
+      console.log("Title:", parsed.roadmap_title);
+      console.log("Phases:", parsed.phases.length);
+
+      // 5 - VALIDATE PHASE WORKLOAD
+      const totalMinutes = parsed.phases.reduce(
+        (phaseAcc, phase) =>
+          phaseAcc +
+          phase.tasks.reduce(
+            (taskAcc, task) => taskAcc + task.estimated_minutes,
+            0,
+          ),
         0,
       );
-      const maxMinutes =
-        phase.duration_weeks * 7 * (input.dailyHours ?? 2) * 60;
-      if (totalMinutes > maxMinutes * 1.2) {
-        throw new Error(`Unrealistic workload in phase: ${phase.title}`);
+      console.log("\n---- STEP 5 : Creating Goal ----");
+      // 1 - CREATE USER GOAL
+      goal = await RoadmapService.createGoal({
+        user_id: userId,
+        title: refinedGoal,
+        current_level: input.currentLevel,
+      });
+      const durationMonths = Number(input.duration);
+      const expectedMinutes =
+        durationMonths * 30 * ((input.dailyHours ?? 2) * 60);
+      if (durationMonths <= 0) {
+        throw new Error("Invalid duration");
       }
-    }
+      if (input.dailyHours <= 0) {
+        throw new Error("Invalid study hours");
+      }
+      console.log("Goal created");
+      console.log(goal);
 
-    // 6 - CREATE ROADMAP
-    const roadmap = await RoadmapService.createRoadmap({
-      goal_id: goal.id,
-      title: parsed.roadmap_title,
-    });
+      if (totalMinutes < expectedMinutes * 0.85) {
+        throw new Error(
+          `Roadmap too short. Generated ${
+            totalMinutes / 60
+          } hours but expected at least ${
+            Math.floor(expectedMinutes * 0.85) / 60
+          } hours`,
+        );
+      }
 
-    // 7 - INSERT PHASES + TASKS
-    // CHANGE: taskPayload no longer includes goal_id or completed.
-    // status defaults to 'PENDING' at the DB level.
-    // The sync_task_completion trigger will automatically move it
-    // to IN_PROGRESS / COMPLETED as progress_minutes is updated.
-    for (const [phaseIndex, phase] of parsed.phases.entries()) {
-      const phasePayload = {
-        roadmap_id: roadmap.id,
-        title: phase.title,
-        description: phase.description,
-        estimated_days: phase.duration_weeks * 7,
-        phase_order: phaseIndex + 1,
-      };
+      console.log("\n---- STEP 6 : Creating Roadmap ----");
+      // 6 - CREATE ROADMAP
+      const roadmap = await RoadmapService.createRoadmap({
+        goal_id: goal.id,
+        title: parsed.roadmap_title,
+      });
+      console.log("Roadmap created");
+      console.log(roadmap);
 
-      const createdPhase = await RoadmapService.createPhase(phasePayload);
+      // 7 - INSERT PHASES + TASKS
+      // CHANGE: taskPayload no longer includes goal_id or completed.
+      // status defaults to 'PENDING' at the DB level.
+      // The sync_task_completion trigger will automatically move it
+      // to IN_PROGRESS / COMPLETED as progress_minutes is updated.
+      const totalWeeks = input.duration * 4;
+      const phaseCount = parsed.phases.length;
 
-      for (const [taskIndex, task] of phase.tasks.entries()) {
-        // =========================================================
-        // CHANGE: removed goal_id and completed from payload.
-        // goal is resolved via roadmap_id -> roadmaps -> user_goals.
-        // status is omitted so DB default 'PENDING' applies.
-        // =========================================================
-        const taskPayload = {
+      const baseWeeks = Math.floor(totalWeeks / phaseCount);
+      let remainingWeeks = totalWeeks % phaseCount;
+      for (const [phaseIndex, phase] of parsed.phases.entries()) {
+        const durationWeeks = baseWeeks + (remainingWeeks-- > 0 ? 1 : 0);
+
+        const phasePayload = {
           roadmap_id: roadmap.id,
-          phase_id: createdPhase.id,
-          title: task.title,
-          description: task.description,
-          estimated_minutes: task.estimated_minutes,
-          difficulty: task.difficulty,
-          task_order: task.task_order || taskIndex + 1,
-          progress_minutes: 0,
+          title: phase.title,
+          description: phase.description,
+          estimated_days: durationWeeks * 7,
+          phase_order: phaseIndex + 1,
         };
-        await RoadmapService.createTask(taskPayload);
+        const createdPhase = await RoadmapService.createPhase(phasePayload);
+
+        for (const [taskIndex, task] of phase.tasks.entries()) {
+          // =========================================================
+          // CHANGE: removed goal_id and completed from payload.
+          // goal is resolved via roadmap_id -> roadmaps -> user_goals.
+          // status is omitted so DB default 'PENDING' applies.
+          // =========================================================
+          const taskPayload = {
+            roadmap_id: roadmap.id,
+            phase_id: createdPhase.id,
+            title: task.title,
+            description: task.description,
+            estimated_minutes: task.estimated_minutes,
+            difficulty: task.difficulty,
+            task_order: task.task_order || taskIndex + 1,
+            progress_minutes: 0,
+          };
+          await RoadmapService.createTask(taskPayload);
+        }
       }
+
+      // 8 - GENERATE FIRST WEEKLY PLAN
+      // CHANGE: was generateDailyTasks (single day) — now generates
+      // the full first week so the user has a complete plan on day 1.
+      console.log("\n---- STEP 7 : Weekly Tasks ----");
+
+      console.log("Weekly tasks generated");
+      // =========================================================
+      // 9 - AUTO MATCH EXECUTION CIRCLE
+      // =========================================================
+      console.log("\n---- STEP 8 : Execution Circle ----");
+      try {
+        const circleService = new ExecutionCircleService(supabase);
+
+        await circleService.autoMatchCircle(
+          userId,
+          refinedGoal,
+          durationMonths,
+          input.currentLevel,
+          goalCategory,
+          aiCircleName,
+        );
+        console.log("Execution circle matched successfully");
+      } catch (error) {
+        console.error("Execution circle creation failed:", error);
+      }
+
+      console.log("Execution circle completed");
+      // 10 - MARK ONBOARDING COMPLETE
+      console.log("\n---- STEP 9 : Updating Profile ----");
+      await supabase
+        .from("profiles")
+        .update({
+          daily_study_minutes: input.dailyHours * 60,
+          is_onboarding_completed: true,
+          roadmap_status: "ready",
+        })
+        .eq("id", userId);
+      console.log("Profile updated");
+      console.log("Roadmap generation finished successfully");
+      await dailyTaskService.generateWeeklyTasks(userId);
+
+      return {
+        success: true,
+        goalId: goal.id,
+        roadmapId: roadmap.id,
+      };
+    } catch (err) {
+      try {
+        if (goal) {
+          await RoadmapService.deleteGoal(goal.id);
+        }
+      } catch (cleanupError) {
+        console.error("Goal cleanup failed:", cleanupError);
+      }
+
+      try {
+        await RoadmapService.updateRoadmapStatus(userId, "failed");
+      } catch (statusError) {
+        console.error("Status update failed:", statusError);
+      }
+
+      throw err;
     }
-
-    // 8 - GENERATE FIRST WEEKLY PLAN
-    // CHANGE: was generateDailyTasks (single day) — now generates
-    // the full first week so the user has a complete plan on day 1.
-    await dailyTaskService.generateWeeklyTasks(userId);
-
-    // =========================================================
-    // 9 - AUTO MATCH EXECUTION CIRCLE
-    // =========================================================
-    try {
-      const circleService = new ExecutionCircleService(supabase);
-
-      const durationMonths = parseInt(input.duration, 10) || 6;
-
-      await circleService.autoMatchCircle(
-        userId,
-        refinedGoal,
-        durationMonths,
-        input.currentLevel,
-        aiCircleName,
-      );
-      console.log("Execution circle matched successfully");
-    } catch (error) {
-      console.error("Execution circle creation failed:", error);
-    }
-
-    // 10 - MARK ONBOARDING COMPLETE
-    await supabase
-      .from("profiles")
-      .update({
-        daily_study_minutes: input.dailyHours * 60,
-        is_onboarding_completed: true,
-      })
-      .eq("id", userId);
-
-    return {
-      success: true,
-      goalId: goal.id,
-      roadmapId: roadmap.id,
-    };
   }
 }

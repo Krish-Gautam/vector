@@ -7,10 +7,13 @@ A user has joined our platform and provided their target goal and current skill 
 User Goal Description: "${goalDescription}"
 User Current Level: "${currentLevel}"
 
+
 You must return a JSON object with the following fields:
 {
   "refined_goal_title": "string (the concise, professional goal title)",
+  "goal_category": "string (the category of the goal, e.g., 'Software Engineering', 'Data Science', 'Product Management')",
   "circle_name": "string (the premium, creative name for the execution circle)"
+  
 }
 Do not include any other text, markdown formatting, or explainers. Return only valid JSON.`;
 }

@@ -18,6 +18,7 @@ import {
   Award,
 } from "lucide-react";
 import { motion } from "motion/react";
+import { useAuth } from "../providers/AuthProvider";
 
 interface ProfileData {
   profile: {
@@ -56,6 +57,8 @@ export default function ProfilePage() {
   const [avatarPreview, setAvatarPreview] = useState("");
   const [targetRole, setTargetRole] = useState("");
   const [editSuccess, setEditSuccess] = useState(false);
+
+  const { refreshProfile } = useAuth();
 
   useEffect(() => {
     const fetchProfile = async () => {
@@ -128,6 +131,7 @@ export default function ProfilePage() {
         setTimeout(() => {
           setEditSuccess(false);
         }, 3000);
+        await refreshProfile();
       }
     } catch (err) {
       console.error(err);

@@ -10,30 +10,40 @@ export interface GoalPersona {
 const GOAL_PERSONAS: Record<string, GoalPersona> = {
   faang: {
     mentor: "expert FAANG engineer and technical interview coach",
-    focusAreas: "Data Structures, Algorithms, System Design, and Behavioral interviews",
+    focusAreas:
+      "Data Structures, Algorithms, System Design, and Behavioral interviews",
     successMetric: "passing FAANG-level technical interviews",
   },
   dsa: {
     mentor: "competitive programming expert and DSA specialist",
-    focusAreas: "Arrays, Trees, Graphs, Dynamic Programming, and Problem Solving patterns",
-    successMetric: "mastering Data Structures and Algorithms from fundamentals to advanced",
+    focusAreas:
+      "Arrays, Trees, Graphs, Dynamic Programming, and Problem Solving patterns",
+    successMetric:
+      "mastering Data Structures and Algorithms from fundamentals to advanced",
   },
   competitive_exam: {
     mentor: "exam strategist and subject matter expert",
-    focusAreas: "syllabus coverage, mock tests, weak area improvement, and time management",
+    focusAreas:
+      "syllabus coverage, mock tests, weak area improvement, and time management",
     successMetric: "clearing the target competitive exam with a high score",
   },
   startup: {
     mentor: "full-stack engineer and product development coach",
-    focusAreas: "system architecture, product thinking, shipping fast, and scaling",
+    focusAreas:
+      "system architecture, product thinking, shipping fast, and scaling",
     successMetric: "building and launching a production-ready product",
   },
 };
 
-const KNOWN_KEYS = Object.keys(GOAL_PERSONAS) as Array<keyof typeof GOAL_PERSONAS>;
+const KNOWN_KEYS = Object.keys(GOAL_PERSONAS) as Array<
+  keyof typeof GOAL_PERSONAS
+>;
 
 function getStaticPersona(goal: string): GoalPersona | null {
-  const key = goal.trim().toLowerCase().replace(/[\s-]+/g, "_");
+  const key = goal
+    .trim()
+    .toLowerCase()
+    .replace(/[\s-]+/g, "_");
   return GOAL_PERSONAS[key] ?? null;
 }
 
@@ -70,11 +80,16 @@ interface ClassificationResult {
 }
 
 async function classifyGoal(goal: string): Promise<ClassificationResult> {
+  console.log("\n===== classifyGoal =====");
+
   const response = await openai.responses.create({
-    model: "gpt-5",
+    model: "gpt-5-mini",
     instructions: CLASSIFY_SYSTEM_PROMPT,
     input: `Goal: ${goal}`,
-    max_output_tokens: 150,
+    max_output_tokens: 500,
+    reasoning: {
+      effort: "minimal",
+    },
     text: {
       format: {
         type: "json_schema",
@@ -85,10 +100,18 @@ async function classifyGoal(goal: string): Promise<ClassificationResult> {
     },
   });
 
-  const parsed = JSON.parse(response.output_text.trim());
-  return parsed as ClassificationResult;
-}
+  console.log("Full response:");
+  console.dir(response, { depth: null });
 
+  console.log("output_text:");
+  console.log(JSON.stringify(response.output_text));
+
+  if (!response.output_text || response.output_text.trim().length === 0) {
+    throw new Error("OpenAI returned empty output_text");
+  }
+
+  return JSON.parse(response.output_text);
+}
 // ---- STEP 2: freeform generation, only when nothing matched ----
 
 const PERSONA_SCHEMA = {
@@ -111,10 +134,13 @@ Rules:
 
 async function generatePersona(goal: string): Promise<GoalPersona> {
   const response = await openai.responses.create({
-    model: "gpt-5",
+    model: "gpt-5-mini",
     instructions: PERSONA_SYSTEM_PROMPT,
     input: `Goal: ${goal}`,
-    max_output_tokens: 300,
+    max_output_tokens: 500,
+    reasoning: {
+      effort: "minimal",
+    },
     text: {
       format: {
         type: "json_schema",
@@ -124,6 +150,12 @@ async function generatePersona(goal: string): Promise<GoalPersona> {
       },
     },
   });
+  if (response.status !== "completed") {
+    console.error(response);
+    throw new Error(
+        `Classification failed: ${response.incomplete_details?.reason}`
+    );
+}
 
   const parsed = JSON.parse(response.output_text.trim());
 
@@ -137,8 +169,15 @@ async function generatePersona(goal: string): Promise<GoalPersona> {
 // ---- PUBLIC ENTRY POINT ----
 
 export async function derivePersona(goal: string): Promise<GoalPersona> {
+  console.log("Goal received:", JSON.stringify(goal));
+
   const staticMatch = getStaticPersona(goal);
+
+  console.log("Static match:", staticMatch);
+
   if (staticMatch) return staticMatch;
+
+  console.log("Calling classifyGoal");
 
   const { matchedKey, examName } = await classifyGoal(goal);
 
@@ -162,15 +201,15 @@ export async function buildRoadmapPrompt(input: {
   goal: string;
   currentLevel: string;
   dailyHours?: number;
-  durationMonths: number;
+  duration: number;
 }): Promise<string> {
   const dailyMinutes = (input.dailyHours ?? 2) * 60;
 
-  const totalAvailableMinutes = input.durationMonths * 30 * dailyMinutes;
+  const totalAvailableMinutes = input.duration * 30 * dailyMinutes;
 
   const minimumRequiredMinutes = Math.floor(totalAvailableMinutes * 0.85);
 
-   const persona: GoalPersona = await derivePersona(input.goal);
+  const persona: GoalPersona = await derivePersona(input.goal);
 
   return `
 You are an ${persona.mentor}.
@@ -185,7 +224,7 @@ USER DATA:
 - Goal: ${input.goal}
 - Current Level: ${input.currentLevel}
 - Daily Study Time: ${dailyMinutes} minutes
-- Target Duration: ${input.durationMonths} months
+- Target Duration: ${input.duration} months
 
 WORKLOAD REQUIREMENTS:
 - Total available study minutes: ${totalAvailableMinutes}
@@ -197,8 +236,9 @@ CRITICAL RULES:
 2. Each phase must have:
    - title
    - description
-   - duration_weeks
+
    - phase_order
+
 
 3. Each task must have:
    - title
@@ -240,7 +280,6 @@ JSON STRUCTURE:
     {
       "title": "string",
       "description": "string",
-      "duration_weeks": number,
       "phase_order": number,
       "tasks": [
         {

@@ -13,5 +13,10 @@ router.put(
     upload.single("avatar"),
     ProfileController.update
 );
+router.get(
+  "/status",
+  verifyUser,
+  ProfileController.getRoadmapStatus
+);
 
 export default router;

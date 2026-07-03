@@ -204,4 +204,17 @@ export class ProfileService {
       },
     };
   }
+  static async getRoadmapStatus(userId: string) {
+  const { data, error } = await supabase
+    .from("profiles")
+    .select("roadmap_status")
+    .eq("id", userId)
+    .single();
+
+  if (error) throw error;
+
+  return {
+    roadmap_status: data.roadmap_status,
+  };
+}
 }

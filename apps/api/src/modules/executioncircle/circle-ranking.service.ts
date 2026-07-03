@@ -27,7 +27,6 @@ export class CircleRankingService {
       .from("execution_circles")
       .update({
         circle_rank: rank,
-        health_score: Math.round(avg),
       })
       .eq("id", circleId);
   }

@@ -47,16 +47,164 @@ function computeCircleName(goal: string, level: string, index: number): string {
   return `${levelLabel} ${shortGoal} Circle #${index}`;
 }
 
+const MATCH_THRESHOLD = 80;
 export class ExecutionCircleService {
   constructor(private readonly supabase: SupabaseClient) {}
+
+  private async markMemberActive(circleId: string, userId: string) {
+    await this.supabase
+      .from("circle_members")
+      .update({ last_active_at: new Date().toISOString() })
+      .eq("circle_id", circleId)
+      .eq("user_id", userId);
+  }
+
+  private async logCircleActivity(
+    circleId: string,
+    userId: string,
+    activityType: "post_created" | "member_joined" | "proof_uploaded" | "task_completed" | "streak_milestone" | "comment_created" | "like_added" | "challenge_completed",
+    metadata: Record<string, any> | null = null,
+  ) {
+    await this.supabase.from("circle_activity").insert({
+      circle_id: circleId,
+      user_id: userId,
+      activity_type: activityType,
+      metadata,
+    });
+  }
+
+  private async calculateCircleHealth(circleId: string): Promise<CircleHealthData> {
+    const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+    const sevenDaysAgoISO = sevenDaysAgo.toISOString();
+
+    const [membersRes, activityRes] = await Promise.all([
+      this.supabase
+        .from("circle_members")
+        .select(" accountability_score")
+        .eq("circle_id", circleId),
+      this.supabase
+        .from("circle_activity")
+        .select("user_id, created_at")
+        .eq("circle_id", circleId)
+        .gte("created_at", sevenDaysAgoISO),
+    ]);
+
+    if (membersRes.error) throw membersRes.error;
+    if (activityRes.error) throw activityRes.error;
+
+    const members = membersRes.data ?? [];
+    const recentActivity = activityRes.data ?? [];
+    const totalMembers = members.length;
+    const uniqueActiveUsers = new Set(recentActivity.map((a) => a.user_id));
+
+    let totalStreakDays = 0;
+    let totalAccountability = 0;
+
+    for (const member of members) {
+      
+      totalAccountability += member.accountability_score ?? 0;
+    }
+
+
+    const avgAccountability =
+      totalMembers > 0 ? totalAccountability / totalMembers : 0;
+
+    const participationScore =
+      totalMembers > 0 ? (uniqueActiveUsers.size / totalMembers) * 40 : 0;
+    const activityScore =
+      totalMembers > 0
+        ? Math.min(recentActivity.length / (totalMembers * 4), 1) * 30
+        : 0;
+
+    const accountabilityScore = Math.min(avgAccountability / 100, 1) * 10;
+
+    const score = Math.round(
+      Math.min(
+        participationScore + activityScore  + accountabilityScore,
+        100,
+      ),
+    );
+
+    return {
+      score,
+      status: computeHealthStatus(score),
+      weekly_posts: recentActivity.length,
+      active_members: uniqueActiveUsers.size,
+
+    };
+  }
+
+  private async refreshCircleHealth(circleId: string): Promise<CircleHealthData> {
+    const health = await this.calculateCircleHealth(circleId);
+
+    const { error } = await this.supabase
+      .from("execution_circles")
+      .update({ health_score: health.score })
+      .eq("id", circleId);
+
+    if (error) throw error;
+
+    return health;
+  }
+
+  async getCircleHealth(circleId: string): Promise<CircleHealthData> {
+    return this.calculateCircleHealth(circleId);
+  }
+
+  private async verifyCircleMembership(
+    userId: string,
+    circleId: string,
+  ): Promise<void> {
+    const { data, error } = await this.supabase
+      .from("circle_members")
+      .select("id")
+      .eq("circle_id", circleId)
+      .eq("user_id", userId)
+      .maybeSingle();
+
+    if (error) throw error;
+
+    if (!data) {
+      throw new Error("You are not a member of this circle.");
+    }
+  }
+
+  private calculateSimilarity(
+    circle: ExecutionCircle,
+    duration: number,
+    level: string,
+  ): number {
+    let score = 0;
+
+    // Level
+    if (circle.current_level === level) score += 40;
+
+    // Duration
+    const diff = Math.abs(circle.duration_months - duration);
+
+    if (diff === 0) score += 40;
+    else if (diff === 1) score += 35;
+    else if (diff === 2) score += 28;
+    else if (diff === 3) score += 20;
+    else if (diff <= 6) score += 10;
+
+    // Available space
+    const fillRatio = circle.member_count / circle.max_size;
+
+    if (fillRatio < 0.8) score += 20;
+    else score += 10;
+
+    return score;
+  }
 
   // ── Auto-match ──────────────────────────────────────────
 
   async autoMatchCircle(
     userId: string,
     goal: string,
-    durationMonths: number,
+    duration: number,
     currentLevel: string,
+    goalCategory: string,
     aiCircleName?: string,
   ): Promise<AutoMatchResult> {
     const { data: existingMembership } = await this.supabase
@@ -75,61 +223,63 @@ export class ExecutionCircleService {
     }
 
     // Determine the refined goal title and the premium circle name via OpenAI
-    let refinedGoal = goal;
-    let circleName = aiCircleName;
+    const refinedGoal = goal;
+    const circleName = aiCircleName;
 
-    if (!circleName) {
-      try {
-        const details = await OpenAIService.determineCircleDetails(
-          goal,
-          currentLevel,
-        );
-        refinedGoal = details.refined_goal_title;
-        circleName = details.circle_name;
-      } catch (error) {
-        console.error(
-          "Failed to determine circle details via AI, falling back:",
-          error,
-        );
-        refinedGoal = goal;
+    const { data: candidateCircles } = await this.supabase
+      .from("execution_circles")
+      .select("*")
+      .eq("goal_category", goalCategory)
+      .eq("current_level", currentLevel);
+
+    let bestCircle = null;
+    let bestScore = 0;
+
+    for (const circle of candidateCircles ?? []) {
+      if (circle.member_count >= circle.max_size) continue;
+
+      const score = this.calculateSimilarity(circle, duration, currentLevel);
+
+      if (
+        score > bestScore ||
+        (score === bestScore &&
+          bestCircle &&
+          circle.member_count > bestCircle.member_count)
+      ) {
+        bestScore = score;
+        bestCircle = circle;
       }
     }
 
-    const { data: matchingCircles } = await this.supabase
-      .from("execution_circles")
-      .select("*")
-      .eq("goal", refinedGoal)
-      .eq("duration_months", durationMonths)
-      .eq("current_level", currentLevel)
-      .order("member_count", { ascending: false });
+    if (bestCircle && bestScore >= MATCH_THRESHOLD) {
+      await this.addMember(bestCircle.id, userId);
 
-    const availableCircle = (matchingCircles ?? []).find(
-      (c: ExecutionCircle) => c.member_count < c.max_size,
-    );
-
-    if (availableCircle) {
-      await this.addMember(availableCircle.id, userId);
+      await this.logCircleActivity(bestCircle.id, userId, "member_joined", {
+        reason: "auto_match",
+      });
 
       // Fix member_count trigger bug: recount manually and update DB
       const { count } = await this.supabase
         .from("circle_members")
         .select("id", { count: "exact", head: true })
-        .eq("circle_id", availableCircle.id);
+        .eq("circle_id", bestCircle.id);
 
       const { data: updatedCircle } = await this.supabase
         .from("execution_circles")
         .update({ member_count: count ?? 0 })
-        .eq("id", availableCircle.id)
+        .eq("id", bestCircle.id)
         .select()
         .single();
 
+      await this.refreshCircleHealth(bestCircle.id);
+
       return {
-        circle: (updatedCircle ?? availableCircle) as ExecutionCircle,
+        circle: (updatedCircle ?? bestCircle) as ExecutionCircle,
         is_new: false,
       };
     }
 
-    const existingCount = (matchingCircles ?? []).length;
+    const existingCount = (candidateCircles ?? []).length;
     const finalCircleName =
       circleName ||
       computeCircleName(refinedGoal, currentLevel, existingCount + 1);
@@ -139,10 +289,12 @@ export class ExecutionCircleService {
       .insert({
         name: finalCircleName,
         goal: refinedGoal,
-        duration_months: durationMonths,
+        goal_category: goalCategory,
+        duration_months: duration,
         current_level: currentLevel,
         max_size: 25,
         member_count: 0,
+        health_score: 0,
       })
       .select()
       .single();
@@ -151,6 +303,10 @@ export class ExecutionCircleService {
       throw new Error(error?.message ?? "Failed to create circle");
 
     await this.addMember(newCircle.id, userId, "lead");
+
+    await this.logCircleActivity(newCircle.id, userId, "member_joined", {
+      reason: "circle_created",
+    });
 
     // Fix member_count trigger bug: recount manually and update DB
     const { count } = await this.supabase
@@ -164,6 +320,8 @@ export class ExecutionCircleService {
       .eq("id", newCircle.id)
       .select()
       .single();
+
+    await this.refreshCircleHealth(newCircle.id);
 
     return {
       circle: (updatedCircle ?? newCircle) as ExecutionCircle,
@@ -204,6 +362,9 @@ export class ExecutionCircleService {
     if (existing) throw new Error("Already a member of this circle");
 
     const member = await this.addMember(circleId, userId);
+    await this.logCircleActivity(circleId, userId, "member_joined", {
+      source: "manual_join",
+    });
 
     // Fix member_count trigger bug: recount manually and update DB
     const { count } = await this.supabase
@@ -218,40 +379,9 @@ export class ExecutionCircleService {
       .select()
       .single();
 
+    await this.refreshCircleHealth(circleId);
+
     return { member, circle: circle as ExecutionCircle };
-  }
-  private computeHealthScore(
-    members: { streak_days: number; last_active_at: string | null }[],
-    weeklyPosts: number,
-  ): { score: number; activeMemberCount: number; avgStreak: number } {
-    const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
-
-    let activeMemberCount = 0;
-    let totalStreakDays = 0;
-
-    for (const m of members) {
-      if (m.last_active_at && new Date(m.last_active_at) >= sevenDaysAgo) {
-        activeMemberCount++;
-      }
-      totalStreakDays += m.streak_days ?? 0;
-    }
-
-    const totalMembers = members.length;
-    const avgStreak =
-      totalMembers > 0 ? Math.round(totalStreakDays / totalMembers) : 0;
-
-    // 40% participation + 30% post rate + 30% streak
-    const participationScore =
-      totalMembers > 0 ? (activeMemberCount / totalMembers) * 40 : 0;
-    const postRateScore =
-      totalMembers > 0 ? Math.min(weeklyPosts / totalMembers / 2, 1) * 30 : 0;
-    const streakScore = Math.min(avgStreak / 15, 1) * 30;
-
-    const score = Math.round(
-      Math.min(participationScore + postRateScore + streakScore, 100),
-    );
-
-    return { score, activeMemberCount, avgStreak };
   }
   // ── Circle detail ────────────────────────────────────────
 
@@ -289,37 +419,7 @@ export class ExecutionCircleService {
 
     const circle = circleRes.data as ExecutionCircle;
     const weeklyPosts = weeklyPostsRes.count ?? 0;
-
-    let activeMemberCount = 0;
-    let totalStreakDays = 0;
-
-    for (const member of members) {
-      if (
-        member.last_active_at &&
-        new Date(member.last_active_at) >= sevenDaysAgo
-      ) {
-        activeMemberCount++;
-      }
-
-      totalStreakDays += member.streak_days ?? 0;
-    }
-
-    const totalMembers = members.length;
-
-    const avgStreak =
-      totalMembers > 0 ? Math.round(totalStreakDays / totalMembers) : 0;
-
-    const participationScore =
-      totalMembers > 0 ? (activeMemberCount / totalMembers) * 40 : 0;
-
-    const postRateScore =
-      totalMembers > 0 ? Math.min(weeklyPosts / totalMembers / 2, 1) * 30 : 0;
-
-    const streakScore = Math.min(avgStreak / 15, 1) * 30;
-
-    const healthScore = Math.round(
-      Math.min(participationScore + postRateScore + streakScore, 100),
-    );
+    const health = await this.calculateCircleHealth(circleId);
 
     const topPerformers = [...members]
       .sort((a, b) => b.total_points - a.total_points)
@@ -330,9 +430,9 @@ export class ExecutionCircleService {
       members,
       recent_posts: recentPosts,
       active_challenge: activeChallenge,
-      health_score: healthScore,
+      health_score: health.score,
       completed_challenge_by_me: activeChallenge?.completed_by_me ?? false,
-      weekly_activity_count: weeklyPosts,
+      weekly_activity_count: health.weekly_posts || weeklyPosts,
       top_performers: topPerformers,
     };
   }
@@ -559,6 +659,7 @@ export class ExecutionCircleService {
   async createPost(
     input: CreatePostInput,
     userId: string,
+    options: { logActivity?: boolean } = {},
   ): Promise<CirclePost> {
     const { data, error } = await this.supabase
       .from("circle_posts")
@@ -574,11 +675,15 @@ export class ExecutionCircleService {
     if (error || !data)
       throw new Error(error?.message ?? "Failed to create post");
 
-    await this.supabase
-      .from("circle_members")
-      .update({ last_active_at: new Date().toISOString() })
-      .eq("circle_id", input.circle_id)
-      .eq("user_id", userId);
+    await this.markMemberActive(input.circle_id, userId);
+
+    if (options.logActivity !== false) {
+      await this.logCircleActivity(input.circle_id, userId, "post_created", {
+        post_id: data.id,
+      });
+    }
+
+    await this.refreshCircleHealth(input.circle_id);
 
     return data as CirclePost;
   }
@@ -608,12 +713,12 @@ export class ExecutionCircleService {
       .single();
 
     if (post?.circle_id) {
-      await this.supabase.from("circle_activity").insert({
-        circle_id: post.circle_id,
-        user_id: userId,
-        activity_type: "post_created",
-        metadata: { post_id: input.post_id, action: "commented" },
+      await this.markMemberActive(post.circle_id, userId);
+      await this.logCircleActivity(post.circle_id, userId, "comment_created", {
+        post_id: input.post_id,
+        comment_id: data.id,
       });
+      await this.refreshCircleHealth(post.circle_id);
     }
 
     return data as CircleComment;
@@ -641,6 +746,22 @@ export class ExecutionCircleService {
       await this.supabase
         .from("circle_post_likes")
         .insert({ post_id: postId, user_id: userId });
+    }
+
+    const { data: post } = await this.supabase
+      .from("circle_posts")
+      .select("circle_id")
+      .eq("id", postId)
+      .single();
+
+    if (post?.circle_id) {
+      await this.markMemberActive(post.circle_id, userId);
+      if (!existing) {
+        await this.logCircleActivity(post.circle_id, userId, "like_added", {
+          post_id: postId,
+        });
+      }
+      await this.refreshCircleHealth(post.circle_id);
     }
 
     // The DB trigger updates likes_count automatically.
@@ -714,7 +835,7 @@ export class ExecutionCircleService {
 
     const { data: member } = await this.supabase
       .from("circle_members")
-      .select("id, accountability_score")
+      .select("id, accountability_score, circle_id")
       .eq("user_id", userId)
       .maybeSingle();
 
@@ -725,6 +846,12 @@ export class ExecutionCircleService {
           accountability_score: (member.accountability_score || 0) + 5,
         })
         .eq("id", member.id);
+
+      await this.logCircleActivity(member.circle_id, userId, "challenge_completed", {
+        challenge_id: challengeId,
+      });
+      await this.markMemberActive(member.circle_id, userId);
+      await this.refreshCircleHealth(member.circle_id);
     }
   }
 
@@ -814,6 +941,7 @@ export class ExecutionCircleService {
     await this.createPost(
       { circle_id: circleId, content: postContent, post_type: "win" },
       userId,
+      { logActivity: false },
     );
 
     const { data: member } = await this.supabase
@@ -843,12 +971,12 @@ export class ExecutionCircleService {
     });
 
     // Also log to circle_activity
-    await this.supabase.from("circle_activity").insert({
-      circle_id: circleId,
-      user_id: userId,
-      activity_type: "proof_uploaded",
-      metadata: { proof_id: proof.id, description },
+    await this.logCircleActivity(circleId, userId, "proof_uploaded", {
+      proof_id: proof.id,
+      description,
     });
+
+    await this.refreshCircleHealth(circleId);
 
     return proof;
   }
