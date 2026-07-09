@@ -219,34 +219,49 @@ export default function ProfilePage() {
         className="max-w-[1200px] mx-auto px-4 md:px-8 py-8"
       >
         {/* HEADER */}
-        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-10 pb-6 border-b border-zinc-900">
-          <div>
-            <div className="flex items-center gap-2 mb-1.5">
-              <span className="text-[10px] font-bold font-mono tracking-widest text-zinc-500 uppercase">
-                Vector Node
-              </span>
-              <div className="h-1 w-1 rounded-full bg-zinc-600" />
-              <span className="text-[10px] font-bold font-mono tracking-widest text-zinc-400 uppercase">
-                USER PROFILE
-              </span>
-            </div>
-            <h1 className="text-2xl md:text-3xl font-extrabold tracking-tight text-white flex items-center gap-2">
-              Parameters & Roadmaps
-            </h1>
-            <p className="text-sm text-zinc-500 mt-0.5">
-              Manage your credentials, bio details, and review actively linked
-              execution streams.
-            </p>
-          </div>
 
-          {/* Mobile Sidebar Trigger */}
-          <div className="xl:hidden">
-            <button
-              onClick={() => setMobileOpen(true)}
-              className="p-2.5 rounded-xl border border-zinc-800 bg-zinc-900/30 text-zinc-400 hover:text-white hover:bg-zinc-900 transition-colors"
-            >
-              <Menu className="h-5 w-5" />
-            </button>
+        <div className="mb-6 md:mb-8 pb-5 md:pb-6 border-b border-zinc-900">
+          <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+            {/* LEFT */}
+            <div className="min-w-0">
+              <div className="flex items-center gap-2 mb-2">
+                <span className="text-[10px] font-bold font-mono tracking-widest text-zinc-500 uppercase">
+                  Vector Node
+                </span>
+
+                <div className="h-1 w-1 rounded-full bg-zinc-600" />
+
+                <span className="text-[10px] font-bold font-mono tracking-widest text-zinc-400 uppercase">
+                  User Profile
+                </span>
+              </div>
+
+              <div className="flex items-start justify-between gap-3">
+                <div className="min-w-0 flex-1">
+                  <h1 className="text-lg sm:text-xl md:text-3xl font-extrabold tracking-tight text-white break-words">
+                    Parameters & Roadmaps
+                  </h1>
+
+                  <p className="text-sm text-zinc-500 mt-0.5">
+                    Manage your credentials, bio details, and review actively
+                    linked execution streams.
+                  </p>
+                </div>
+
+                {/* Mobile Sidebar Trigger */}
+                <button
+                  onClick={() => setMobileOpen(true)}
+                  className="xl:hidden flex-shrink-0 p-2.5 rounded-xl border border-zinc-800 bg-zinc-900/30 text-zinc-400 hover:text-white hover:bg-zinc-900 transition-colors"
+                >
+                  <Menu className="h-5 w-5" />
+                </button>
+              </div>
+            </div>
+
+            {/* RIGHT */}
+            <div className="hidden xl:block">
+              {/* Future desktop actions can go here */}
+            </div>
           </div>
         </div>
 

@@ -1,17 +1,19 @@
 import { roadmapSchema } from "./roadmap.schema.js";
 import { buildRoadmapPrompt } from "../ai/prompts/roadmap.prompt.js";
 import { OpenAIService } from "../ai/openai.service.js";
-
+import { RoadmapTemplateService } from "../roadmaptemplate/roadmaptemplate.service.js";
 import { dailyTaskService } from "../dailytask/dailytask.service.js";
 
 import { supabase } from "../../data/supabase.client.js";
 import { ExecutionCircleService } from "../executioncircle/executioncircle.service.js";
+
 interface GenerateRoadmapInput {
   goal: string;
   currentLevel: string;
   duration: number;
   dailyHours: number;
 }
+
 export class RoadmapService {
   static async updateRoadmapStatus(
     userId: string,
@@ -26,6 +28,7 @@ export class RoadmapService {
 
     if (error) throw error;
   }
+
   static async getRoadmapByGoalId(goalId: string) {
     const { data, error } = await supabase
       .from("roadmaps")
@@ -97,6 +100,7 @@ export class RoadmapService {
 
     return phase;
   }
+
   static async deleteGoal(goalId: string) {
     const { error } = await supabase
       .from("user_goals")
@@ -224,7 +228,9 @@ export class RoadmapService {
     console.log("Profile status -> generating");
     await RoadmapService.updateRoadmapStatus(userId, "generating");
     try {
-      // 0 - REFINE GOAL + GET CATEGORY + CIRCLE NAME
+      // =========================================================
+      // STEP 1 - REFINE GOAL + GET CATEGORY + CIRCLE NAME
+      // =========================================================
       let refinedGoal = input.goal;
       let aiCircleName = "";
       let goalCategory = refinedGoal;
@@ -240,9 +246,6 @@ export class RoadmapService {
         goalCategory = details.goal_category ?? "General";
       } catch (e) {
         console.error("AI goal refinement failed:", e);
-        console.error("Goal refinement failed");
-        console.error(e);
-
         refinedGoal = input.goal;
         aiCircleName = "";
         goalCategory = "General";
@@ -251,67 +254,85 @@ export class RoadmapService {
       console.log("Circle:", aiCircleName);
       console.log("Category:", goalCategory);
 
-      // 2 - BUILD AI PROMPT
-      console.log("\n---- STEP 2 : Building Prompt ----");
       input.goal = refinedGoal;
-      const prompt = await buildRoadmapPrompt(input);
-      console.log("Prompt built successfully");
 
-      // 3 - GENERATE AI ROADMAP
-      console.log("\n---- STEP 3 : Calling OpenAI ----");
-      const aiResponse = await OpenAIService.generateRoadmap(prompt);
-      if (!aiResponse) {
-        throw new Error("AI response empty");
-      }
-      console.log("OpenAI response received");
-      console.log(aiResponse?.substring(0, 500) + "...");
+      // =========================================================
+      // STEP 2 - TEMPLATE MATCH OR AI GENERATION
+      // =========================================================
+      console.log("\n---- STEP 2 : Template Match / AI Generation ----");
 
-      // 4 - PARSE + VALIDATE
-      console.log("\n---- STEP 4 : Parsing JSON ----");
-
-      const raw = JSON.parse(aiResponse);
-
-      console.log(
-        raw.phases.map((p: any, i: number) => ({
-          phase: i + 1,
-          title: p.title,
-        })),
+      const match = await RoadmapTemplateService.findMatchingTemplate(
+        goalCategory,
+        input.currentLevel,
       );
 
-      const parsed = roadmapSchema.parse(raw);
-      console.log("Roadmap parsed successfully");
-      console.log("Title:", parsed.roadmap_title);
-      console.log("Phases:", parsed.phases.length);
+      let parsed: any;
+      let isTemplateMiss = false;
 
-      // 5 - VALIDATE PHASE WORKLOAD
+      if (match) {
+        console.log("Template HIT:", match.template.title);
+        const phases = RoadmapTemplateService.instantiate(
+          match.template,
+          input.duration,
+          input.dailyHours,
+        );
+        parsed = { roadmap_title: match.template.title, phases };
+
+        // non-blocking usage stats update
+        supabase
+          .from("roadmap_templates")
+          .update({
+            usage_count: match.template.usage_count + 1,
+            last_used_at: new Date().toISOString(),
+          })
+          .eq("id", match.template.id)
+          .then(() => {});
+      } else {
+        console.log("Template MISS — calling OpenAI");
+        isTemplateMiss = true;
+        const prompt = await buildRoadmapPrompt(input);
+        const aiResponse = await OpenAIService.generateRoadmap(prompt);
+        if (!aiResponse) throw new Error("AI response empty");
+        console.log("OpenAI response received");
+        console.log(aiResponse.substring(0, 500) + "...");
+
+        const raw = JSON.parse(aiResponse);
+        console.log(
+          raw.phases.map((p: any, i: number) => ({
+            phase: i + 1,
+            title: p.title,
+          })),
+        );
+
+        parsed = roadmapSchema.parse(raw);
+        console.log("Roadmap parsed successfully");
+        console.log("Title:", parsed.roadmap_title);
+        console.log("Phases:", parsed.phases.length);
+      }
+
+      // =========================================================
+      // STEP 3 - VALIDATE PHASE WORKLOAD
+      // =========================================================
       const totalMinutes = parsed.phases.reduce(
-        (phaseAcc, phase) =>
+        (phaseAcc: number, phase: any) =>
           phaseAcc +
           phase.tasks.reduce(
-            (taskAcc, task) => taskAcc + task.estimated_minutes,
+            (taskAcc: number, task: any) => taskAcc + task.estimated_minutes,
             0,
           ),
         0,
       );
-      console.log("\n---- STEP 5 : Creating Goal ----");
-      // 1 - CREATE USER GOAL
-      goal = await RoadmapService.createGoal({
-        user_id: userId,
-        title: refinedGoal,
-        current_level: input.currentLevel,
-      });
+
       const durationMonths = Number(input.duration);
       const expectedMinutes =
         durationMonths * 30 * ((input.dailyHours ?? 2) * 60);
+
       if (durationMonths <= 0) {
         throw new Error("Invalid duration");
       }
       if (input.dailyHours <= 0) {
         throw new Error("Invalid study hours");
       }
-      console.log("Goal created");
-      console.log(goal);
-
       if (totalMinutes < expectedMinutes * 0.85) {
         throw new Error(
           `Roadmap too short. Generated ${
@@ -322,8 +343,23 @@ export class RoadmapService {
         );
       }
 
-      console.log("\n---- STEP 6 : Creating Roadmap ----");
-      // 6 - CREATE ROADMAP
+      // =========================================================
+      // STEP 4 - CREATE USER GOAL
+      // =========================================================
+      console.log("\n---- STEP 4 : Creating Goal ----");
+      goal = await RoadmapService.createGoal({
+        user_id: userId,
+        title: refinedGoal,
+        category: goalCategory,
+        current_level: input.currentLevel,
+      });
+      console.log("Goal created");
+      console.log(goal);
+
+      // =========================================================
+      // STEP 5 - CREATE ROADMAP
+      // =========================================================
+      console.log("\n---- STEP 5 : Creating Roadmap ----");
       const roadmap = await RoadmapService.createRoadmap({
         goal_id: goal.id,
         title: parsed.roadmap_title,
@@ -331,11 +367,14 @@ export class RoadmapService {
       console.log("Roadmap created");
       console.log(roadmap);
 
-      // 7 - INSERT PHASES + TASKS
+      // =========================================================
+      // STEP 6 - INSERT PHASES + TASKS
       // CHANGE: taskPayload no longer includes goal_id or completed.
       // status defaults to 'PENDING' at the DB level.
       // The sync_task_completion trigger will automatically move it
       // to IN_PROGRESS / COMPLETED as progress_minutes is updated.
+      // =========================================================
+      console.log("\n---- STEP 6 : Inserting Phases + Tasks ----");
       const totalWeeks = input.duration * 4;
       const phaseCount = parsed.phases.length;
 
@@ -354,11 +393,6 @@ export class RoadmapService {
         const createdPhase = await RoadmapService.createPhase(phasePayload);
 
         for (const [taskIndex, task] of phase.tasks.entries()) {
-          // =========================================================
-          // CHANGE: removed goal_id and completed from payload.
-          // goal is resolved via roadmap_id -> roadmaps -> user_goals.
-          // status is omitted so DB default 'PENDING' applies.
-          // =========================================================
           const taskPayload = {
             roadmap_id: roadmap.id,
             phase_id: createdPhase.id,
@@ -373,14 +407,20 @@ export class RoadmapService {
         }
       }
 
-      // 8 - GENERATE FIRST WEEKLY PLAN
-      // CHANGE: was generateDailyTasks (single day) — now generates
-      // the full first week so the user has a complete plan on day 1.
-      console.log("\n---- STEP 7 : Weekly Tasks ----");
-
-      console.log("Weekly tasks generated");
       // =========================================================
-      // 9 - AUTO MATCH EXECUTION CIRCLE
+      // STEP 7 - SAVE AS TEMPLATE (fire-and-forget, only on a miss)
+      // =========================================================
+      console.log("\n---- STEP 7 : Template Save (if applicable) ----");
+      if (isTemplateMiss) {
+        RoadmapTemplateService.saveAsTemplate(
+          parsed,
+          goalCategory,
+          input.currentLevel,
+        ).catch((err) => console.error("Template save error:", err));
+      }
+
+      // =========================================================
+      // STEP 8 - AUTO MATCH EXECUTION CIRCLE
       // =========================================================
       console.log("\n---- STEP 8 : Execution Circle ----");
       try {
@@ -399,8 +439,9 @@ export class RoadmapService {
         console.error("Execution circle creation failed:", error);
       }
 
-      console.log("Execution circle completed");
-      // 10 - MARK ONBOARDING COMPLETE
+      // =========================================================
+      // STEP 9 - MARK ONBOARDING COMPLETE
+      // =========================================================
       console.log("\n---- STEP 9 : Updating Profile ----");
       await supabase
         .from("profiles")
@@ -411,8 +452,15 @@ export class RoadmapService {
         })
         .eq("id", userId);
       console.log("Profile updated");
-      console.log("Roadmap generation finished successfully");
+
+      // =========================================================
+      // STEP 10 - GENERATE FIRST WEEKLY PLAN
+      // =========================================================
+      console.log("\n---- STEP 10 : Weekly Tasks ----");
       await dailyTaskService.generateWeeklyTasks(userId);
+      console.log("Weekly tasks generated");
+
+      console.log("Roadmap generation finished successfully");
 
       return {
         success: true,
