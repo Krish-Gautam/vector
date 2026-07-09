@@ -11,6 +11,9 @@ import profileRoutes from "./modules/profile/profile.routes.js";
 import { supabase } from "./data/supabase.client.js";
 import { createExecutionCircleRouter } from "./modules/executioncircle/executioncircle.routes.js";
 import "./modules/executioncircle/weekly-refresh.job.js";
+import healthRoutes from "./modules/health/healthRoutes.js";
+
+// after app = express()
 
 const app = express();
 
@@ -33,6 +36,7 @@ app.use("/api/dashboard", dashboardRoutes);
 app.use("/api/dailytask", dailytaskRoutes);
 app.use("/api/profile", profileRoutes);
 app.use("/api/execution-circle", createExecutionCircleRouter(supabase));
+app.use("/health", healthRoutes);
 
 // ── 404 Handler ────────────────────────────────────────────
 app.use((req, res) => {
