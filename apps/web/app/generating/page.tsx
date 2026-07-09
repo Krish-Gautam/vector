@@ -23,6 +23,10 @@ const STEPS = [
   { label: "Matching execution circle", icon: Users },
 ];
 
+// Increasing gaps = deceleration. Step N unlocks after the cumulative delay.
+// Tune these to taste; last step is reached ~18s in, then holds until real "ready".
+const STEP_DELAYS = [2200, 3800, 5400, 6800]; // ms between step i -> i+1
+
 type ToastState = { type: "success" | "error"; message: string } | null;
 
 export default function GeneratingPage() {
@@ -31,10 +35,26 @@ export default function GeneratingPage() {
   const [activeStep, setActiveStep] = useState(0);
   const [toast, setToast] = useState<ToastState>(null);
   const doneRef = useRef(false);
+  const activeStepRef = useRef(0); // mirrors activeStep so async code can read latest value
+
+  useEffect(() => {
+    activeStepRef.current = activeStep;
+  }, [activeStep]);
 
   // Poll roadmap status
   useEffect(() => {
     let interval: NodeJS.Timeout;
+
+    const fastForwardToEnd = async (finalToast: ToastState, redirectPath: string, delay: number) => {
+      // Smoothly walk through any steps we haven't visually reached yet
+      for (let i = activeStepRef.current + 1; i < STEPS.length; i++) {
+        await new Promise((res) => setTimeout(res, 320));
+        setActiveStep(i);
+      }
+      await new Promise((res) => setTimeout(res, 260));
+      setToast(finalToast);
+      setTimeout(() => router.replace(redirectPath), delay);
+    };
 
     const checkStatus = async () => {
       try {
@@ -44,25 +64,25 @@ export default function GeneratingPage() {
           case "ready":
             if (doneRef.current) return;
             doneRef.current = true;
-
             clearInterval(interval);
-            setActiveStep(STEPS.length);
-            setToast({ type: "success", message: "Roadmap generated" });
 
-            setTimeout(() => router.replace("/roadmap"), 1600);
+            fastForwardToEnd(
+              { type: "success", message: "Roadmap generated" },
+              "/roadmap",
+              1600
+            );
             break;
 
           case "failed":
             if (doneRef.current) return;
             doneRef.current = true;
-
             clearInterval(interval);
-            setToast({
-              type: "error",
-              message: "Roadmap generation failed",
-            });
 
-            setTimeout(() => router.replace("/onboarding"), 1800);
+            fastForwardToEnd(
+              { type: "error", message: "Roadmap generation failed" },
+              "/onboarding",
+              1800
+            );
             break;
 
           default:
@@ -79,22 +99,32 @@ export default function GeneratingPage() {
     return () => clearInterval(interval);
   }, [router]);
 
-  // Cosmetic step progression so the wait never looks stalled
+  // Cosmetic step progression — staggered timeouts instead of a fixed interval,
+  // so it decelerates toward the last step rather than ticking at a constant rate.
   useEffect(() => {
-    const stepTimer = setInterval(() => {
-      setActiveStep((s) => (doneRef.current ? s : Math.min(s + 1, STEPS.length - 1)));
-    }, 3400);
+    const timeouts: NodeJS.Timeout[] = [];
+    let cumulative = 0;
 
-    return () => clearInterval(stepTimer);
+    STEP_DELAYS.forEach((delay, i) => {
+      cumulative += delay;
+      const t = setTimeout(() => {
+        if (doneRef.current) return;
+        setActiveStep((s) => Math.max(s, i + 1));
+      }, cumulative);
+      timeouts.push(t);
+    });
+
+    return () => timeouts.forEach(clearTimeout);
   }, []);
 
+  const displayStep = Math.min(activeStep, STEPS.length - 1);
   const progressPct = Math.min(
     ((activeStep + (doneRef.current ? 1 : 0.5)) / STEPS.length) * 100,
     100
   );
   const progressLabel = doneRef.current
     ? "Finalizing roadmap"
-    : STEPS[Math.min(activeStep, STEPS.length - 1)]?.label ?? "Working...";
+    : STEPS[displayStep]?.label ?? "Working...";
 
   return (
     <div className="relative flex min-h-screen items-center justify-center overflow-hidden bg-black px-6 text-white">
@@ -185,7 +215,7 @@ export default function GeneratingPage() {
               </div>
               <div className="rounded-2xl border border-white/15 bg-white/5 px-3 py-2 text-right">
                 <div className="font-mono text-xs text-white/60">
-                  Step {Math.min(activeStep + 1, STEPS.length)}
+                  Step {Math.min(displayStep + 1, STEPS.length)}
                 </div>
                 <div className="mt-1 text-sm font-semibold text-white">
                   {doneRef.current ? "Ready" : "Working"}
@@ -195,8 +225,8 @@ export default function GeneratingPage() {
 
             <div className="mt-6 flex flex-col text-left">
               {STEPS.map((step, i) => {
-                const completed = i < activeStep || doneRef.current;
-                const active = i === activeStep && !doneRef.current;
+                const completed = i < displayStep || doneRef.current;
+                const active = i === displayStep && !doneRef.current;
 
                 return (
                   <div key={step.label} className="flex gap-4">
@@ -272,9 +302,7 @@ export default function GeneratingPage() {
               <AlertTriangle className="h-5 w-5 shrink-0 text-white/70" />
             )}
             <div className="text-left">
-              <p className="text-sm font-medium text-white">
-                {toast.message}
-              </p>
+              <p className="text-sm font-medium text-white">{toast.message}</p>
               <p className="text-xs text-white/45">
                 {toast.type === "success"
                   ? "Taking you there now..."

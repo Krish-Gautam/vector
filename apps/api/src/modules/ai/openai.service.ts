@@ -2,42 +2,44 @@ import { openai } from "../../data/openai.client.js";
 import { buildCircleDeterminationPrompt } from "./prompts/circle.prompt.js";
 
 export class OpenAIService {
-  static async generateRoadmap(
-    prompt: string
-  ) {
-    const response =
-      await openai.chat.completions.create({
-        model: "gpt-5",
+  static async generateRoadmap(prompt: string) {
+    const response = await openai.chat.completions.create({
+      model: "gpt-5",
 
-        messages: [
-          {
-            role: "system",
-            content:
-              "You are a roadmap generation AI.",
-          },
-          {
-            role: "user",
-            content: prompt,
-          },
-        ],
-
-        response_format: {
-          type: "json_object",
+      messages: [
+        {
+          role: "system",
+          content: "You are a roadmap generation AI.",
         },
-      });
+        {
+          role: "user",
+          content: prompt,
+        },
+      ],
 
-    return response.choices[0]
-      .message.content;
+      response_format: {
+        type: "json_object",
+      },
+    });
+
+    return response.choices[0].message.content;
   }
 
-  static async determineCircleDetails(goalDescription: string, currentLevel: string) {
-    const prompt = buildCircleDeterminationPrompt(goalDescription, currentLevel);
+  static async determineCircleDetails(
+    goalDescription: string,
+    currentLevel: string,
+  ) {
+    const prompt = buildCircleDeterminationPrompt(
+      goalDescription,
+      currentLevel,
+    );
     const response = await openai.chat.completions.create({
       model: "gpt-5",
       messages: [
         {
           role: "system",
-          content: "You are a specialized AI that refines goals and names execution circles.",
+          content:
+            "You are a specialized AI that refines goals and names execution circles.",
         },
         {
           role: "user",
@@ -51,7 +53,9 @@ export class OpenAIService {
 
     const content = response.choices[0].message.content;
     if (!content) {
-      throw new Error("OpenAI returned empty response for circle determination");
+      throw new Error(
+        "OpenAI returned empty response for circle determination",
+      );
     }
 
     return JSON.parse(content) as {
@@ -61,4 +65,12 @@ export class OpenAIService {
     };
   }
 
+  // src/ai/openai.service.ts
+  static async getEmbedding(text: string): Promise<number[]> {
+    const response = await openai.embeddings.create({
+      model: "text-embedding-3-small", // 1536 dims, cheap
+      input: text,
+    });
+    return response.data[0].embedding;
+  }
 }

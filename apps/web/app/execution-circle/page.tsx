@@ -35,6 +35,7 @@ import {
   Trophy,
 } from "lucide-react";
 import { motion, AnimatePresence, LayoutGroup } from "motion/react";
+import ExecutionSkeleton from "./ExecutionSkeleton";
 
 // ── Design System ──────────────────────────────────────────
 const COLORS = {
@@ -1601,27 +1602,7 @@ export default function ExecutionCirclePage() {
 
   const renderContent = () => {
     if (isLoading) {
-      return (
-        <div
-          className={`flex-1 p-8 max-w-7xl mx-auto grid grid-cols-12 gap-8 w-full`}
-        >
-          <div className="col-span-12 lg:col-span-9 space-y-6">
-            <Skeleton className="h-8 w-48" />
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              <Skeleton className="h-24" />
-              <Skeleton className="h-24" />
-              <Skeleton className="h-24" />
-            </div>
-            <Skeleton className="h-48" />
-            <Skeleton className="h-64" />
-          </div>
-          <div className="col-span-12 lg:col-span-3 space-y-4">
-            <Skeleton className="h-48" />
-            <Skeleton className="h-40" />
-            <Skeleton className="h-32" />
-          </div>
-        </div>
-      );
+      return <ExecutionSkeleton />;
     }
 
     if (error || !circle) {
