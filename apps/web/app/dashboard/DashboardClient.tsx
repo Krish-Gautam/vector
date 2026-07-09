@@ -240,14 +240,47 @@ export default function DashboardClient() {
             item.id === task.id ? { ...item, completed: true } : item,
           );
 
+        const updatedTodayTasks = updateList(prev.data.tasks.today);
+        const updatedWeeklyTasks = updateList(prev.data.tasks.weekly);
+
+        // Recalculate metrics locally
+        const totalTodayTasks = updatedTodayTasks.length;
+        const completedTodayCount = updatedTodayTasks.filter((t) => t.completed).length;
+
+        const completionRate =
+          totalTodayTasks > 0
+            ? Math.round((completedTodayCount / totalTodayTasks) * 100)
+            : 0;
+
+        let executionGrade = "C";
+        if (completionRate >= 90) executionGrade = "A";
+        else if (completionRate >= 75) executionGrade = "B";
+
+        // Increment streak by 1 if this is the first task completed today
+        const wasCompletedBefore = prev.data.tasks.today.some((t) => t.completed);
+        const isCompletedNow = updatedTodayTasks.some((t) => t.completed);
+        let streakChange = 0;
+        if (!wasCompletedBefore && isCompletedNow) {
+          streakChange = 1;
+        }
+
         return {
           ...prev,
           data: {
             ...prev.data,
+            streak: {
+              ...prev.data.streak,
+              current: prev.data.streak.current + streakChange,
+            },
             tasks: {
               ...prev.data.tasks,
-              today: updateList(prev.data.tasks.today),
-              weekly: updateList(prev.data.tasks.weekly),
+              today: updatedTodayTasks,
+              weekly: updatedWeeklyTasks,
+            },
+            analytics: {
+              ...prev.data.analytics,
+              completionRate,
+              executionGrade,
             },
           },
         };
