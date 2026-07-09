@@ -524,17 +524,58 @@ export class DailyTaskService {
 
   // =========================================================
   // GET STREAK
-  // CHANGE: new method — delegates to Postgres function so streak
-  //         is timezone-safe and computed in one DB call
+  // Timezone-safe streak calculation computed in application logic
+  // to avoid issues with Postgres function only showing active streak after today's task completion.
   // =========================================================
 
-  async getStreak(userId: string): Promise<number> {
-    const { data, error } = await supabase.rpc("get_user_streak", {
-      p_user_id: userId,
-    });
+  async getStreak(userId: string, timezone?: string): Promise<number> {
+    let tz = timezone;
+    if (!tz) {
+      const { data: profile } = await supabase
+        .from("profiles")
+        .select("timezone")
+        .eq("id", userId)
+        .single();
+      tz = profile?.timezone ?? "Asia/Kolkata";
+    }
+
+    const { data: logs, error } = await supabase
+      .from("activity_logs")
+      .select("activity_date")
+      .eq("user_id", userId)
+      .order("activity_date", { ascending: false });
 
     if (error) throw error;
-    return (data as number) ?? 0;
+    if (!logs || logs.length === 0) return 0;
+
+    const activeDates = new Set(logs.map((l) => l.activity_date));
+
+    const today = new Date();
+    const todayStr = new Intl.DateTimeFormat("en-CA", { timeZone: tz }).format(today);
+
+    const yesterday = new Date();
+    yesterday.setDate(yesterday.getDate() - 1);
+    const yesterdayStr = new Intl.DateTimeFormat("en-CA", { timeZone: tz }).format(yesterday);
+
+    if (!activeDates.has(todayStr) && !activeDates.has(yesterdayStr)) {
+      return 0;
+    }
+
+    const checkDate = activeDates.has(todayStr) ? todayStr : yesterdayStr;
+    let streak = 0;
+
+    const current = new Date(checkDate + "T12:00:00");
+    while (true) {
+      const checkStr = new Intl.DateTimeFormat("en-CA", { timeZone: tz }).format(current);
+      if (activeDates.has(checkStr)) {
+        streak++;
+        current.setDate(current.getDate() - 1);
+      } else {
+        break;
+      }
+    }
+
+    return streak;
   }
 
   // =========================================================

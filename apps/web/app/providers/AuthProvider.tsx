@@ -5,6 +5,7 @@ import {
   useCallback,
   useContext,
   useEffect,
+  useRef,
   useMemo,
   useState,
 } from "react";
@@ -37,6 +38,7 @@ export function AuthProvider({
   const [user, setUser] = useState<User | null>(null);
   const [profile, setProfile] = useState<Profile | null>(null);
   const [loading, setLoading] = useState(true);
+  const mountedRef = useRef(true);
 
   const loadProfile = useCallback(async (userId: string) => {
     const { data, error } = await supabase
@@ -51,6 +53,8 @@ export function AuthProvider({
       return;
     }
 
+    if (!mountedRef.current) return;
+
     setProfile(data);
   }, []);
 
@@ -61,6 +65,24 @@ export function AuthProvider({
 
   useEffect(() => {
     let mounted = true;
+    mountedRef.current = true;
+
+    const applySession = (
+      session: Awaited<ReturnType<typeof supabase.auth.getSession>>["data"]["session"],
+    ) => {
+      const authUser = session?.user ?? null;
+
+      syncAuthSession(session);
+
+      setUser(authUser);
+      setLoading(false);
+
+      if (authUser) {
+        void loadProfile(authUser.id);
+      } else {
+        setProfile(null);
+      }
+    };
 
     const loadSession = async () => {
       const {
@@ -69,43 +91,20 @@ export function AuthProvider({
 
       if (!mounted) return;
 
-      const authUser = session?.user ?? null;
-
-      syncAuthSession(session);
-
-      setUser(authUser);
-
-      if (authUser) {
-        await loadProfile(authUser.id);
-      } else {
-        setProfile(null);
-      }
-
-      setLoading(false);
+      applySession(session);
     };
 
     const {
       data: { subscription },
     } = supabase.auth.onAuthStateChange(async (_event, session) => {
-      const authUser = session?.user ?? null;
-
-      syncAuthSession(session);
-
-      setUser(authUser);
-
-      if (authUser) {
-        await loadProfile(authUser.id);
-      } else {
-        setProfile(null);
-      }
-
-      setLoading(false);
+      applySession(session);
     });
 
     loadSession();
 
     return () => {
       mounted = false;
+      mountedRef.current = false;
       subscription.unsubscribe();
     };
   }, [loadProfile]);

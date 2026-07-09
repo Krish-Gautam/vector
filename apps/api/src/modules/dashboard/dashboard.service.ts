@@ -140,11 +140,9 @@ export class DashboardService {
         .limit(1)
         .single(),
 
-      // CHANGE: streak now comes from the Postgres function instead of
-      // pulling all activity_logs to JS and doing date math here.
-      // get_user_streak uses the activity_date generated column +
-      // unique index — fast and timezone-safe.
-      supabase.rpc("get_user_streak", { p_user_id: userId }),
+      // CHANGE: streak is computed via timezone-safe application logic
+      // to avoid bugs with the RPC not returning active streak before doing today's tasks
+      dailyTaskService.getStreak(userId, tz),
     ]);
 
     const phases = phasesResult.data ?? [];
@@ -157,11 +155,8 @@ export class DashboardService {
 
     // =========================================================
     // STREAK
-    // CHANGE: was a JS function that fetched all activity_logs,
-    // deduplicated with toLocaleDateString (timezone-unsafe), and
-    // looped manually. Now a single Postgres RPC call.
     // =========================================================
-    const currentStreak = (streakResult.data as number) ?? 0;
+    const currentStreak = (streakResult as number) ?? 0;
 
     // =========================================================
     // ROADMAP PROGRESS (based on minutes, not task count)
