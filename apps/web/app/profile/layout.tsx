@@ -7,10 +7,10 @@ export const metadata: Metadata = {
   },
 };
 
-export default function AuthLayout({
+export default function ProfileLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
-  return <div className="min-h-screen bg-white">{children}</div>;
+  return children;
 }
