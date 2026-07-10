@@ -13,7 +13,6 @@ import { createExecutionCircleRouter } from "./modules/executioncircle/execution
 import "./modules/executioncircle/weekly-refresh.job.js";
 import healthRoutes from "./modules/health/healthRoutes.js";
 
-// after app = express()
 
 const app = express();
 
