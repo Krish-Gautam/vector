@@ -4,6 +4,7 @@ import "./globals.css";
 import { AuthProvider } from "./providers/AuthProvider";
 import StructuredData from "./components/StructuredData";
 import { siteConfig } from "@/app/lib/seo";
+import { GoogleAnalytics } from "@next/third-parties/google";
 
 
 const inter = Inter({
@@ -74,11 +75,12 @@ export default function RootLayout({
       <body
         className={`${inter.variable} ${jakarta.variable} ${instrument.variable} bg-[#070b0a] text-white antialiased`}
       >
-        <AuthProvider>
-          <StructuredData />
-          {children}
-        </AuthProvider>
+        <AuthProvider>{children}</AuthProvider>
       </body>
+
+      <GoogleAnalytics
+        gaId={process.env.NEXT_PUBLIC_GA_MEASUREMENT_ID!}
+      />
     </html>
   );
 }
